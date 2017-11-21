@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,9 +17,11 @@ import (
 )
 
 var (
-	cmdFlag, envListFlag     string
-	hostnameFlag, rootFSFlag string
-	makeBaselineFlag         bool
+	cmdFlag, envListFlag        string
+	hostnameFlag, rootFSFlag    string
+	makeBaselineFlag, enableNet bool
+
+	bridgeName, vethName string
 )
 
 func init() {
@@ -85,6 +88,10 @@ func main() {
 	flag.StringVar(&rootFSFlag, "root_fs", "./", "Directory which is the root fs inside the silo")
 	flag.StringVar(&hostnameFlag, "hostname", "silo", "Hostname to set inside the silo")
 	flag.BoolVar(&makeBaselineFlag, "baseline-env", false, "Have colex create a busybox environment from busybox.tar environment instead of using root_fs")
+
+	flag.BoolVar(&enableNet, "net", false, "Create a virtual ethernet bridge between the silo and host")
+	flag.StringVar(&bridgeName, "bridge", "silobr", "Name of bridge device to create")
+	flag.StringVar(&vethName, "veth", "siloveth", "Name of veth pair to create")
 	flag.Parse()
 
 	var err error
@@ -96,6 +103,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("pre-flight root FS setup failed: %v", err)
 	}
+	defer cleanup()
 
 	cmd := reexec.Command("isolatedMain", rootFSFlag, cmdFlag, envListFlag, hostnameFlag)
 	cmd.Stdin = os.Stdin
@@ -109,9 +117,37 @@ func main() {
 		GidMappings: []syscall.SysProcIDMap{colex.MapGroup(os.Getgid(), 0)},
 	}
 
-	if err := cmd.Run(); err != nil {
-		cleanup()
-		log.Fatalf("Run() failed: %v", err)
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Start() failed: %v\n", err)
+		return
 	}
-	cleanup()
+
+	if enableNet {
+		bridge, err := colex.CreateNetBridge(bridgeName, net.ParseIP("192.168.153.1"), &net.IPNet{Mask: net.IPv4Mask(255, 255, 255, 0)})
+		if err != nil {
+			fmt.Printf("CreateNetBridge() failed: %v\n", err)
+			return
+		}
+		hostVeth, siloVeth, err := colex.CreateVethPair(vethName)
+		if err != nil {
+			fmt.Printf("CreateVethPair() failed: %v\n", err)
+			return
+		}
+		err = colex.AttachNetBridge(bridge, hostVeth)
+		if err != nil {
+			fmt.Printf("AttachNetBridge(hostVeth) failed: %v\n", err)
+			return
+		}
+		err = colex.MoveVethToNamespace(siloVeth, cmd.Process.Pid)
+		if err != nil {
+			fmt.Printf("MoveVethToNamespace(siloVeth) failed: %v\n", err)
+			return
+		}
+
+		// TODO: Assign IP address in the host & bring up interface.
+	}
+
+	if err := cmd.Wait(); err != nil {
+		fmt.Printf("Wait() failed: %v\n", err)
+	}
 }
