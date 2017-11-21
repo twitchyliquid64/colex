@@ -30,4 +30,4 @@ Create a silo with your own root FS (not busybox) and get a shell there:
 # credit
 
 This was exploratory / learning exercise, made with heavy reference to https://www.infoq.com/articles/build-a-container-golang &
-https://medium.com/@teddyking/linux-namespaces-850489d3ccf & google.com.
+https://medium.com/@teddyking/linux-namespaces-850489d3ccf & https://blog.scottlowe.org/2013/09/04/introducing-linux-network-namespaces/ & https://google.com.
