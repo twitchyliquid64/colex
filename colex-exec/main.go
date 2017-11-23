@@ -22,6 +22,7 @@ var (
 	makeBaselineFlag, enableNet bool
 
 	bridgeName, vethName string
+	bridgeAddr, siloAddr string
 )
 
 func init() {
@@ -92,9 +93,19 @@ func main() {
 	flag.BoolVar(&enableNet, "net", false, "Create a virtual ethernet bridge between the silo and host")
 	flag.StringVar(&bridgeName, "bridge", "silobr", "Name of bridge device to create")
 	flag.StringVar(&vethName, "veth", "siloveth", "Name of veth pair to create")
+	flag.StringVar(&bridgeAddr, "bridgeaddr", "192.168.153.1/24", "Address & mask for the bridge interface")
+	flag.StringVar(&siloAddr, "siloaddr", "192.168.153.2/24", "Address & mask for the bridge interface")
 	flag.Parse()
 
-	var err error
+	bridgeIP, bridgeSubnet, err := net.ParseCIDR(bridgeAddr)
+	if err != nil {
+		log.Fatalf("Failed parsing bridge address: %v", err)
+	}
+	siloIP, siloSubnet, err := net.ParseCIDR(siloAddr)
+	if err != nil {
+		log.Fatalf("Failed parsing silo address: %v", err)
+	}
+
 	if makeBaselineFlag {
 		rootFSFlag, err = makeBaselineEnv()
 	} else {
@@ -123,11 +134,12 @@ func main() {
 	}
 
 	if enableNet {
-		bridge, err := colex.CreateNetBridge(bridgeName, net.ParseIP("192.168.153.1"), &net.IPNet{Mask: net.IPv4Mask(255, 255, 255, 0)})
+		bridge, err := colex.CreateNetBridge(bridgeName, bridgeIP, bridgeSubnet)
 		if err != nil {
 			fmt.Printf("CreateNetBridge() failed: %v\n", err)
 			return
 		}
+		defer colex.DeleteNetBridge(bridgeName)
 		hostVeth, siloVeth, err := colex.CreateVethPair(vethName)
 		if err != nil {
 			fmt.Printf("CreateVethPair() failed: %v\n", err)
@@ -144,7 +156,23 @@ func main() {
 			return
 		}
 
-		// TODO: Assign IP address in the host & bring up interface.
+		namespaceNet, err := colex.NamespaceNetOpen(cmd.Process.Pid)
+		if err != nil {
+			fmt.Printf("NamespaceNetOpen(%d) failed: %v\n", cmd.Process.Pid, err)
+			return
+		}
+		defer namespaceNet.Close()
+		err = namespaceNet.LinkAddAddress(siloVeth.Name, siloIP, siloSubnet.Mask)
+		if err != nil {
+			fmt.Printf("ns.LinkAddAddress() failed: %v\n", err)
+			return
+		}
+		err = namespaceNet.LinkSetState(siloVeth.Name, true)
+		if err != nil {
+			fmt.Printf("ns.LinkSetState(up) failed: %v\n", err)
+			return
+		}
+		namespaceNet.Close()
 	}
 
 	if err := cmd.Wait(); err != nil {

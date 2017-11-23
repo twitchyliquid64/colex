@@ -39,6 +39,11 @@ func CreateNetBridge(devName string, ip net.IP, subnet *net.IPNet) (*net.Interfa
 	return net.InterfaceByName(devName)
 }
 
+// DeleteNetBridge destroys a network bridge.
+func DeleteNetBridge(devName string) error {
+	return netlink.LinkDel(&netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: devName}})
+}
+
 // AttachNetBridge attaches an interface to the interface of a bridge.
 func AttachNetBridge(bridge, client *net.Interface) error {
 	bridgeLink, err := netlink.LinkByName(bridge.Name)
