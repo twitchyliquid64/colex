@@ -22,7 +22,8 @@ type Options struct {
 	accountMappers []accountMappers
 
 	// network
-	Hostname string
+	Hostname   string
+	Interfaces []interf
 
 	// invocation
 	Cmd  string
@@ -37,7 +38,11 @@ func (o *Options) Finalize() error {
 	if len(o.accountMappers) == 0 {
 		o.accountMappers = append(o.accountMappers, ParentToRootMapping())
 	}
+	if len(o.Interfaces) == 0 {
+		o.Interfaces = append(o.Interfaces, &LoopbackInterface{})
+	}
 	o.Env = append(o.Env, "PS1=\\u@\\h:\\w> ", "CLASS="+o.Class)
+	o.Bases = append(o.Bases, &DevNodesBase{})
 	return nil
 }
 

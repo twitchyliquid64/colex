@@ -24,9 +24,17 @@ type invocationInfo struct {
 
 	Hostname string
 
+	OnStartCommands []StartupCommand
+
 	Cmd  string
 	Args []string
 	Env  []string
+}
+
+// StartupCommand represents a command to be run as the silo is starting.
+type StartupCommand struct {
+	Cmd  string
+	Args []string
 }
 
 func writeInvocationInfo(s *Silo) error {
@@ -40,6 +48,17 @@ func writeInvocationInfo(s *Silo) error {
 		Args: s.Args,
 		Env:  s.Env,
 	}
+
+	for _, interf := range s.Interfaces {
+		cmds, err := interf.SiloSetup(s)
+		if err != nil {
+			return err
+		}
+		for _, cmd := range cmds {
+			d.OnStartCommands = append(d.OnStartCommands, cmd)
+		}
+	}
+
 	b, err := json.Marshal(d)
 	if err != nil {
 		return err
@@ -88,7 +107,14 @@ func isolatedMain() {
 
 	if info.Hostname != "" {
 		if err := syscall.Sethostname([]byte(info.Hostname)); err != nil {
-			fmt.Printf("Setup failure! syscall.Sethostname(%s) error = %v\n", os.Args[4], err)
+			fmt.Printf("Setup failure! syscall.Sethostname(%s) error = %v\n", info.Hostname, err)
+			os.Exit(1)
+		}
+	}
+
+	for i, startCmd := range info.OnStartCommands {
+		if err := exec.Command(startCmd.Cmd, startCmd.Args...).Run(); err != nil {
+			fmt.Printf("Setup failure! Start command %q (index %d) error = %v\n", startCmd.Cmd, i, err)
 			os.Exit(1)
 		}
 	}

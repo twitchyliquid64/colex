@@ -37,6 +37,7 @@ const (
 	StateInternalError
 	StatePending
 	StateRunning
+	StateFinished
 )
 
 // Silo represents a running silo.
@@ -60,7 +61,8 @@ type Silo struct {
 	Env  []string
 
 	// network options
-	Hostname string
+	Hostname   string
+	Interfaces []interf
 
 	// base environment providers
 	bases        []base           // setup filesystem
@@ -90,7 +92,8 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 		Args: make([]string, len(opts.Args)),
 		Env:  make([]string, len(opts.Env)),
 
-		Hostname: opts.Hostname,
+		Hostname:   opts.Hostname,
+		Interfaces: make([]interf, len(opts.Interfaces)),
 
 		userMappings: make([]accountMappers, len(opts.accountMappers)),
 		bases:        make([]base, len(opts.Bases)),
@@ -103,6 +106,7 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 	copy(s.Env, opts.Env)
 	copy(s.userMappings, opts.accountMappers)
 	copy(s.bases, opts.Bases)
+	copy(s.Interfaces, opts.Interfaces)
 
 	if s.Hostname == "" {
 		s.Hostname = s.IDHex
@@ -179,9 +183,14 @@ func (s *Silo) Init() error {
 func (s *Silo) Close() error {
 	if s.State == StateRunning {
 		if !s.child.ProcessState.Exited() {
-			// TODO: Track and kill children properly.
 			err := s.child.Process.Kill()
 			if err != nil {
+				return err
+			}
+		}
+		s.State = StateFinished
+		for _, provider := range s.bases {
+			if err := provider.Teardown(s); err != nil {
 				return err
 			}
 		}
