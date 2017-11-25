@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"net"
 
 	"github.com/twitchyliquid64/colex/controller"
 )
@@ -20,6 +21,15 @@ func main() {
 		Args:  flag.Args(),
 	}
 	builder.AddFS(&controller.BusyboxBase{})
+
+	ip, mask, _ := net.ParseCIDR("10.69.69.1/24")
+	ipSilo, maskSilo, _ := net.ParseCIDR("10.69.69.2/24")
+	builder.Interfaces = append(builder.Interfaces, &controller.IPInterface{
+		BridgeIP:   ip,
+		BridgeMask: mask.Mask,
+		SiloIP:     ipSilo,
+		SiloMask:   maskSilo.Mask,
+	}, &controller.LoopbackInterface{})
 
 	if err := builder.Finalize(); err != nil {
 		log.Fatal(err)

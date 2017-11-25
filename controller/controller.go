@@ -194,6 +194,11 @@ func (s *Silo) Close() error {
 				return err
 			}
 		}
+		for _, interf := range s.Interfaces {
+			if err := interf.Teardown(s); err != nil {
+				return err
+			}
+		}
 	}
 
 	if s.shouldDeleteRoot {
@@ -204,7 +209,7 @@ func (s *Silo) Close() error {
 	return nil
 }
 
-// Start starts the initialized silo.
+// Start starts the initialized silo, and sets up networking.
 func (s *Silo) Start() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -213,7 +218,18 @@ func (s *Silo) Start() error {
 	}
 
 	s.State = StateRunning
-	return s.child.Start()
+	err := s.child.Start()
+	if err != nil {
+		return err
+	}
+
+	for i, interf := range s.Interfaces {
+		if err := interf.Setup(s.child, s, i); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Wait waits for the given silo to exit.
