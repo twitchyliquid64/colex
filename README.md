@@ -5,26 +5,35 @@
 # build
 ```shell
 go get github.com/twitchyliquid64/colex
-go build github.com/twitchyliquid64/colex/colex-exec
+go build github.com/twitchyliquid64/colex/colex-test
 cp ./ $GOPATH/src/github.com/twitchyliquid64/colex/busybox.tar # busybox.tar must be in your working directory
 ```
 
-# use
+# use the test (my early learning tool)
 
 Create a silo with the busybox environment, and get a shell there:
 ```shell
-./colex-exec --baseline-env
+./colex-test --baseline-env
 ```
 
 Run `ls` instead of sh in the busybox environment:
 ```shell
-./colex-exec --baseline-env --cmd /bin/ls
+./colex-test --baseline-env --cmd /bin/ls
 ```
 
 
 Create a silo with your own root FS (not busybox) and get a shell there:
 ```shell
-./colex-exec --root_fs /mah/shitty/root/fs/base/dir
+./colex-test --root_fs /mah/shitty/root/fs/base/dir
+```
+
+# Notes
+
+
+Getting internet working inside the silo:
+
+```shell
+sudo iptables -t nat -A POSTROUTING -m physdev --physdev-in <VETH-PAIR-HOST-SIDE> -j MASQUERADE
 ```
 
 # credit
