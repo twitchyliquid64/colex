@@ -15,6 +15,10 @@ type interf interface {
 	Teardown(*Silo) error
 }
 
+type addressFreeer interface {
+	FreeAssignment(net.IP)
+}
+
 // LoopbackInterface represents a loopback network device within the silo.
 type LoopbackInterface struct {
 }
@@ -53,6 +57,10 @@ type IPInterface struct {
 	SiloMask net.IPMask
 
 	bridgeName, hostVeth, siloVeth string
+
+	InternetAccess bool
+
+	Freeer addressFreeer
 }
 
 // Name implements the interf interface.
@@ -105,6 +113,10 @@ func (i *IPInterface) Teardown(*Silo) error {
 		if err := colex.DeleteNetBridge(i.bridgeName); err != nil {
 			return err
 		}
+	}
+	if i.Freeer != nil {
+		i.Freeer.FreeAssignment(i.BridgeIP)
+		i.Freeer.FreeAssignment(i.SiloIP)
 	}
 	return nil
 }

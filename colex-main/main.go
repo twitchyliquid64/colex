@@ -3,13 +3,13 @@ package main
 import (
 	"flag"
 	"log"
-	"net"
 
 	"github.com/twitchyliquid64/colex/controller"
 )
 
 var (
-	cmdFlag = flag.String("cmd", "/bin/sh", "What command to invoke in the silo")
+	cmdFlag   = flag.String("cmd", "/bin/sh", "What command to invoke in the silo")
+	ipNetFlag = flag.String("net", "10.69.69.1/24", "Subnet to use when assigning IP addresses")
 )
 
 func main() {
@@ -22,16 +22,19 @@ func main() {
 	}
 	builder.AddFS(&controller.BusyboxBase{})
 
-	ip, mask, _ := net.ParseCIDR("10.69.69.1/24")
-	ipSilo, maskSilo, _ := net.ParseCIDR("10.69.69.2/24")
-	builder.Interfaces = append(builder.Interfaces, &controller.IPInterface{
-		BridgeIP:   ip,
-		BridgeMask: mask.Mask,
-		SiloIP:     ipSilo,
-		SiloMask:   maskSilo.Mask,
-	}, &controller.LoopbackInterface{})
+	ipPool, err := controller.NewIPPool(*ipNetFlag)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	if err := builder.Finalize(); err != nil {
+	network, err := ipPool.IPInterface()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	builder.Interfaces = append(builder.Interfaces, network, &controller.LoopbackInterface{})
+
+	if err = builder.Finalize(); err != nil {
 		log.Fatal(err)
 	}
 

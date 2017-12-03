@@ -4,6 +4,7 @@ package controller
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -225,7 +226,7 @@ func (s *Silo) Start() error {
 
 	for i, interf := range s.Interfaces {
 		if err := interf.Setup(s.child, s, i); err != nil {
-			return err
+			return fmt.Errorf("interface %+v setup failed: %v", interf, err)
 		}
 	}
 
