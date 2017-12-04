@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	cmdFlag   = flag.String("cmd", "/bin/sh", "What command to invoke in the silo")
-	ipNetFlag = flag.String("net", "10.69.69.1/24", "Subnet to use when assigning IP addresses")
+	cmdFlag        = flag.String("cmd", "/bin/sh", "What command to invoke in the silo")
+	ipNetFlag      = flag.String("net", "10.69.69.1/24", "Subnet to use when assigning IP addresses")
+	internetAccess = flag.Bool("internet-access", false, "Setup NAT for internet access from within silo")
 )
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	network.InternetAccess = *internetAccess
 
 	builder.Interfaces = append(builder.Interfaces, network, &controller.LoopbackInterface{})
 

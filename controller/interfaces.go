@@ -5,12 +5,13 @@ import (
 	"net"
 	"os/exec"
 
+	"github.com/coreos/go-iptables/iptables"
 	"github.com/twitchyliquid64/colex"
 )
 
 type interf interface {
 	Name(*Silo) (string, error)
-	SiloSetup(*Silo) ([]StartupCommand, error)
+	SiloSetup(*Silo, int) ([]StartupCommand, error)
 	Setup(*exec.Cmd, *Silo, int) error
 	Teardown(*Silo) error
 }
@@ -29,7 +30,7 @@ func (i *LoopbackInterface) Name(*Silo) (string, error) {
 }
 
 // SiloSetup implements the interf interface.
-func (i *LoopbackInterface) SiloSetup(*Silo) ([]StartupCommand, error) {
+func (i *LoopbackInterface) SiloSetup(*Silo, int) ([]StartupCommand, error) {
 	return []StartupCommand{
 		{
 			Cmd:  "/bin/ifconfig",
@@ -61,6 +62,8 @@ type IPInterface struct {
 	InternetAccess bool
 
 	Freeer addressFreeer
+
+	ipt *iptables.IPTables
 }
 
 // Name implements the interf interface.
@@ -69,8 +72,16 @@ func (i *IPInterface) Name(*Silo) (string, error) {
 }
 
 // SiloSetup implements the interf interface.
-func (i *IPInterface) SiloSetup(*Silo) ([]StartupCommand, error) {
-	return nil, nil
+func (i *IPInterface) SiloSetup(s *Silo, index int) ([]StartupCommand, error) {
+	out := []StartupCommand{}
+	if i.InternetAccess {
+		out = append(out, StartupCommand{
+			Cmd:              "/bin/route",
+			Args:             []string{"add", "default", "gw", i.BridgeIP.String()},
+			WaitForInterface: fmt.Sprintf("v%d-%ss", index, s.IDHex),
+		})
+	}
+	return out, nil
 }
 
 // Setup implements the interf interface.
@@ -104,11 +115,33 @@ func (i *IPInterface) Setup(cmd *exec.Cmd, s *Silo, index int) error {
 	if err != nil {
 		return err
 	}
-	return namespaceNet.LinkSetState(i.siloVeth, true)
+	err = namespaceNet.LinkSetState(i.siloVeth, true)
+	if err != nil {
+		return err
+	}
+
+	// setup networking rules
+	i.ipt, err = iptables.New()
+	if err != nil {
+		return err
+	}
+	if i.InternetAccess {
+		err = i.ipt.AppendUnique("nat", "POSTROUTING", "-m", "physdev", "--physdev-in", i.hostVeth, "-j", "MASQUERADE")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Teardown implements the interf interface.
 func (i *IPInterface) Teardown(*Silo) error {
+	if i.InternetAccess {
+		err := i.ipt.Delete("nat", "POSTROUTING", "-m", "physdev", "--physdev-in", i.hostVeth, "-j", "MASQUERADE")
+		if err != nil {
+			return err
+		}
+	}
 	if i.bridgeName != "" {
 		if err := colex.DeleteNetBridge(i.bridgeName); err != nil {
 			return err

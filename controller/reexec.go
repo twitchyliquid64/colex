@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/twitchyliquid64/colex"
@@ -33,8 +35,9 @@ type invocationInfo struct {
 
 // StartupCommand represents a command to be run as the silo is starting.
 type StartupCommand struct {
-	Cmd  string
-	Args []string
+	Cmd              string
+	Args             []string
+	WaitForInterface string
 }
 
 func writeInvocationInfo(s *Silo) error {
@@ -49,8 +52,8 @@ func writeInvocationInfo(s *Silo) error {
 		Env:  s.Env,
 	}
 
-	for _, interf := range s.Interfaces {
-		cmds, err := interf.SiloSetup(s)
+	for index, interf := range s.Interfaces {
+		cmds, err := interf.SiloSetup(s, index)
 		if err != nil {
 			return err
 		}
@@ -113,8 +116,23 @@ func isolatedMain() {
 	}
 
 	for i, startCmd := range info.OnStartCommands {
-		if err := exec.Command(startCmd.Cmd, startCmd.Args...).Run(); err != nil {
-			fmt.Printf("Setup failure! Start command %q (index %d) error = %v\n", startCmd.Cmd, i, err)
+		if startCmd.WaitForInterface != "" {
+			for x := 0; x < 1000; x++ {
+				if in, err := net.InterfaceByName(startCmd.WaitForInterface); err == nil && (in.Flags&net.FlagUp) == 1 {
+					if addrs, err := in.Addrs(); err == nil && len(addrs) > 0 {
+						goto foundInterface
+					}
+				}
+				time.Sleep(time.Millisecond * 10)
+			}
+			fmt.Printf("Setup failure! Wait for interface %q timed out\n", startCmd.WaitForInterface)
+			os.Exit(1)
+		foundInterface:
+		}
+
+		if out, err := exec.Command(startCmd.Cmd, startCmd.Args...).Output(); err != nil {
+			fmt.Printf("Setup failure! Start command %q (index %d) error = %v (len %d)\n", startCmd.Cmd, i, err, len(out))
+			os.Stderr.Write(out)
 			os.Exit(1)
 		}
 	}
