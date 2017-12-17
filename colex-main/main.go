@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 
+	"github.com/twitchyliquid64/colex"
 	"github.com/twitchyliquid64/colex/controller"
 )
 
@@ -15,6 +16,18 @@ var (
 
 func main() {
 	flag.Parse()
+	// enable forwarding if it is required
+	if *internetAccess {
+		forwardingEnabled, err := colex.IPv4ForwardingEnabled()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !forwardingEnabled {
+			if err := colex.IPv4EnableForwarding(true); err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
 
 	builder := controller.Options{
 		Class: "test",

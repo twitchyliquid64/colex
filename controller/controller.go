@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"sync"
 	"syscall"
 
@@ -62,8 +63,10 @@ type Silo struct {
 	Env  []string
 
 	// network options
-	Hostname   string
-	Interfaces []interf
+	Hostname    string
+	Interfaces  []interf
+	Nameservers []string
+	HostMap     map[string]string
 
 	// base environment providers
 	bases        []base           // setup filesystem
@@ -93,12 +96,15 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 		Args: make([]string, len(opts.Args)),
 		Env:  make([]string, len(opts.Env)),
 
-		Hostname:   opts.Hostname,
-		Interfaces: make([]interf, len(opts.Interfaces)),
+		Hostname:    opts.Hostname,
+		Interfaces:  make([]interf, len(opts.Interfaces)),
+		Nameservers: make([]string, len(opts.Nameservers)),
+		HostMap:     map[string]string{},
 
 		userMappings: make([]accountMappers, len(opts.accountMappers)),
 		bases:        make([]base, len(opts.Bases)),
 	}
+
 	for i := range id {
 		s.ID[i] = id[i]
 	}
@@ -108,6 +114,10 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 	copy(s.userMappings, opts.accountMappers)
 	copy(s.bases, opts.Bases)
 	copy(s.Interfaces, opts.Interfaces)
+	copy(s.Nameservers, opts.Nameservers)
+	for hostname, address := range opts.HostMap {
+		s.HostMap[hostname] = address
+	}
 
 	if s.Hostname == "" {
 		s.Hostname = s.IDHex
@@ -142,6 +152,26 @@ func (s *Silo) Init() error {
 			s.State = StateInternalError
 			return err
 		}
+	}
+
+	// Setup resolv.conf
+	resolv, err := os.OpenFile(path.Join(s.Root, "etc", "resolv.conf"), os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer resolv.Close()
+	for _, nameserver := range s.Nameservers {
+		resolv.Write([]byte(fmt.Sprintf("nameserver %s\n", nameserver)))
+	}
+
+	// Setup /etc/hosts
+	hosts, err := os.OpenFile(path.Join(s.Root, "etc", "hosts"), os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	defer hosts.Close()
+	for host, addr := range s.HostMap {
+		hosts.Write([]byte(fmt.Sprintf("%s %s\n", addr, host)))
 	}
 
 	// TODO: Support redirect to files etc

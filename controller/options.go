@@ -22,8 +22,10 @@ type Options struct {
 	accountMappers []accountMappers
 
 	// network
-	Hostname   string
-	Interfaces []interf
+	Hostname    string
+	Interfaces  []interf
+	Nameservers []string
+	HostMap     map[string]string
 
 	// invocation
 	Cmd  string
@@ -40,6 +42,14 @@ func (o *Options) Finalize() error {
 	}
 	o.Env = append(o.Env, "PS1=\\u@\\h:\\w> ", "CLASS="+o.Class)
 	o.Bases = append(o.Bases, &DevNodesBase{})
+	if len(o.Nameservers) == 0 {
+		o.Nameservers = []string{"8.8.8.8"}
+	}
+	if o.HostMap == nil {
+		o.HostMap = map[string]string{"localhost": "127.0.0.1"}
+	} else if o.HostMap["localhost"] == "" {
+		o.HostMap["localhost"] = "127.0.0.1"
+	}
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -86,6 +87,16 @@ func (i *IPInterface) SiloSetup(s *Silo, index int) ([]StartupCommand, error) {
 
 // Setup implements the interf interface.
 func (i *IPInterface) Setup(cmd *exec.Cmd, s *Silo, index int) error {
+	if i.InternetAccess {
+		forwardingEnabled, err := colex.IPv4ForwardingEnabled()
+		if err != nil {
+			return err
+		}
+		if !forwardingEnabled {
+			return errors.New("ipv4 forwarding not enabled in kernel, required")
+		}
+	}
+
 	i.bridgeName = fmt.Sprintf("b%d-%s", index, s.IDHex)
 	i.hostVeth = fmt.Sprintf("v%d-%sh", index, s.IDHex)
 	i.siloVeth = fmt.Sprintf("v%d-%ss", index, s.IDHex)
