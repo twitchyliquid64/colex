@@ -18,4 +18,9 @@ Silo "hi-silo" {
 
 Silo "silo2" {
   name = "welp"
+
+  file "binary" {
+   path = "/bin/ls"
+   silo_path = "/lister"
+  }
 }

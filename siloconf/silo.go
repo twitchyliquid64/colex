@@ -19,14 +19,14 @@ type Silo struct {
 
 	Network Network
 
-	Files map[string]*File `hcl:"file"`
+	Files map[string]File `hcl:"file"`
 }
 
 // File represents configuration for a silo file resource to be put into the
 // environment
 type File struct {
-	Path     string
-	SiloPath string
+	Path     string `hcl:"path"`
+	SiloPath string `hcl:"silo_path"`
 }
 
 // Network represents silo network configuration.

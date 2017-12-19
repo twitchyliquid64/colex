@@ -213,7 +213,7 @@ func (s *Silo) Init() error {
 // Close shuts down the silo.
 func (s *Silo) Close() error {
 	if s.State == StateRunning {
-		if !s.child.ProcessState.Exited() {
+		if s.child.ProcessState != nil && !s.child.ProcessState.Exited() {
 			err := s.child.Process.Kill()
 			if err != nil {
 				return err

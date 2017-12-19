@@ -25,7 +25,12 @@ func TestParse(t *testing.T) {
 				Nameservers: []string{"8.8.8.8"},
 			},
 		},
-		&Silo{Name: "welp"},
+		&Silo{
+			Name: "welp",
+			Files: map[string]File{
+				"binary": File{Path: "/bin/ls", SiloPath: "/lister"},
+			},
+		},
 	}
 
 	if len(sf.Silos) != len(expected) {

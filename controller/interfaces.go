@@ -52,6 +52,8 @@ func (i *LoopbackInterface) Teardown(*Silo) error {
 
 // IPInterface represents a virtual ethernet adapter within the silo.
 type IPInterface struct {
+	isSetup bool
+
 	BridgeIP   net.IP
 	BridgeMask net.IPMask
 
@@ -142,11 +144,20 @@ func (i *IPInterface) Setup(cmd *exec.Cmd, s *Silo, index int) error {
 			return err
 		}
 	}
+	i.isSetup = true
 	return nil
 }
 
 // Teardown implements the interf interface.
 func (i *IPInterface) Teardown(*Silo) error {
+	if !i.isSetup {
+		if i.Freeer != nil {
+			i.Freeer.FreeAssignment(i.BridgeIP)
+			i.Freeer.FreeAssignment(i.SiloIP)
+		}
+		return nil
+	}
+
 	if i.InternetAccess {
 		err := i.ipt.Delete("nat", "POSTROUTING", "-m", "physdev", "--physdev-in", i.hostVeth, "-j", "MASQUERADE")
 		if err != nil {
