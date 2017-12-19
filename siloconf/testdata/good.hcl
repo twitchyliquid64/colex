@@ -13,11 +13,19 @@ Silo "hi-silo" {
     }
   }
 
+  binary {
+    path = "/bin/ls"
+  }
+
   tags = ["FE"]
 }
 
 Silo "silo2" {
   name = "welp"
+
+  binary {
+    path = "/lister"
+  }
 
   file "binary" {
    path = "/bin/ls"

@@ -19,6 +19,8 @@ type Silo struct {
 
 	Network Network
 
+	Binary Binary
+
 	Files map[string]File `hcl:"file"`
 }
 
@@ -34,4 +36,11 @@ type Network struct {
 	InternetAccess bool `hcl:"internet_access"`
 	Nameservers    []string
 	Hosts          map[string]string
+}
+
+// Binary represents the initial invocation details of the silo.
+type Binary struct {
+	Path string   `hcl:"path"`
+	Env  []string `hcl:"env"`
+	Args []string `hcl:"args"`
 }

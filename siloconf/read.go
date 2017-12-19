@@ -24,6 +24,14 @@ func ParseSiloFile(data []byte) (*SiloFile, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// basic sanitization.
+	for i := range outSpec.Silos {
+		if outSpec.Silos[i].Base == "" {
+			outSpec.Silos[i].Base = "img://busybox"
+		}
+	}
+
 	return &outSpec, nil
 }
 

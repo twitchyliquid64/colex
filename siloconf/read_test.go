@@ -24,11 +24,18 @@ func TestParse(t *testing.T) {
 				},
 				Nameservers: []string{"8.8.8.8"},
 			},
+			Binary: Binary{
+				Path: "/bin/ls",
+			},
 		},
 		&Silo{
 			Name: "welp",
+			Base: "img://busybox",
 			Files: map[string]File{
 				"binary": File{Path: "/bin/ls", SiloPath: "/lister"},
+			},
+			Binary: Binary{
+				Path: "/lister",
 			},
 		},
 	}

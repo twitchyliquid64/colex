@@ -137,12 +137,11 @@ func isolatedMain() {
 		}
 	}
 
-	cmd := exec.Command(info.Cmd)
+	cmd := exec.Command(info.Cmd, info.Args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = info.Env
-	cmd.Args = info.Args
 	if err := cmd.Run(); err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
 			os.Exit(1)

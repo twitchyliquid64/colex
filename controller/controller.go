@@ -210,10 +210,16 @@ func (s *Silo) Init() error {
 	return nil
 }
 
+// IsRunning returns true if the container is still up.
+func (s *Silo) IsRunning() bool {
+	return s.child.ProcessState != nil && !s.child.ProcessState.Exited()
+}
+
 // Close shuts down the silo.
 func (s *Silo) Close() error {
 	if s.State == StateRunning {
-		if s.child.ProcessState != nil && !s.child.ProcessState.Exited() {
+		sigErr := syscall.Kill(s.child.Process.Pid, syscall.Signal(0))
+		if sigErr == nil || sigErr == syscall.EPERM {
 			err := s.child.Process.Kill()
 			if err != nil {
 				return err

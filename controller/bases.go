@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 )
 
 // BusyboxBase provides a minimal Busybox environment for the container.
@@ -18,7 +20,11 @@ func (b *BusyboxBase) Setup(c *exec.Cmd, s *Silo) error {
 		if err != nil {
 			return err
 		}
-		b.BusyboxTar = filepath.Join(wd, "busybox.tar")
+		if runtime.GOARCH != "amd64" {
+			b.BusyboxTar = filepath.Join(wd, "busybox-"+runtime.GOARCH+".tar")
+		} else {
+			b.BusyboxTar = filepath.Join(wd, "busybox.tar")
+		}
 	}
 
 	return exec.Command("tar", "--overwrite", "-C", s.Root, "-xf", b.BusyboxTar).Run()
@@ -52,5 +58,24 @@ func (b *DevNodesBase) Setup(c *exec.Cmd, s *Silo) error {
 
 // Teardown implements base.
 func (b *DevNodesBase) Teardown(*Silo) error {
+	return nil
+}
+
+// FileLoaderBase places a file at a path on the filesystem.
+type FileLoaderBase struct {
+	RemotePath string
+	Data       []byte
+}
+
+// Setup implements base.
+func (f *FileLoaderBase) Setup(c *exec.Cmd, s *Silo) error {
+	defer func() {
+		f.Data = nil // let it be collected if there are no other references
+	}()
+	return ioutil.WriteFile(filepath.Join(s.Root, f.RemotePath), f.Data, 0777)
+}
+
+// Teardown implements base.
+func (f *FileLoaderBase) Teardown(*Silo) error {
 	return nil
 }
