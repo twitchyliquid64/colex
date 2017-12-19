@@ -66,6 +66,7 @@ func (s *Server) Close() error {
 	s.lock.Lock()
 	for name := range s.silos {
 		if err := s.stopSiloInternal(name); err != nil {
+			s.lock.Unlock()
 			return err
 		}
 	}
