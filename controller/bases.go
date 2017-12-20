@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -32,6 +33,25 @@ func (b *BusyboxBase) Setup(c *exec.Cmd, s *Silo) error {
 
 // Teardown implements base.
 func (b *BusyboxBase) Teardown(*Silo) error {
+	return nil
+}
+
+// TarballBase unpacks the tarball into the silo.
+type TarballBase struct {
+	TarballPath string
+}
+
+// Setup implements base.
+func (b *TarballBase) Setup(c *exec.Cmd, s *Silo) error {
+	if b.TarballPath == "" {
+		return errors.New("tarballbase: expected path to be set")
+	}
+
+	return exec.Command("tar", "--overwrite", "-C", s.Root, "-xf", b.TarballPath).Run()
+}
+
+// Teardown implements base.
+func (b *TarballBase) Teardown(*Silo) error {
 	return nil
 }
 

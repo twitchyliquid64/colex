@@ -14,7 +14,7 @@ cd server
 export GOPATH=`pwd`
 go get github.com/twitchyliquid64/colex
 go build github.com/twitchyliquid64/colex/colexd
-sudo ./colexd --addr localhost:8080 # colexd must run as root for now, cuz containers + cbf
+sudo ./colexd --addr localhost:8080 --ip-pool 10.21.0.1/24 # colexd must run as root for now, cuz containers + cbf
 ```
 
 ## setup client
@@ -25,7 +25,7 @@ go get github.com/twitchyliquid64/colex
 go build github.com/twitchyliquid64/colex/colexd/colex-cli
 ```
 
-## starting a silo
+## usage
 
 Given a silo configuration like:
 

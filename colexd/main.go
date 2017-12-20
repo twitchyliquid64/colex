@@ -9,18 +9,34 @@ import (
 )
 
 var (
-	ipPool = flag.String("ip-pool", "10.69.69.1/24", "Subnet to use when assigning IP addresses")
-	addr   = flag.String("addr", ":8080", "Address server runs on")
+	ipPool = flag.String("ip-pool", "", "Subnet to use when assigning IP addresses")
+	addr   = flag.String("addr", "", "Address server runs on")
 )
 
 func main() {
 	flag.Parse()
+	var conf *config
 
-	s, err := NewServer(*addr, *ipPool)
+	if flag.NArg() == 0 {
+		log.Printf("Warning: No configuration file, using defaults + flags.")
+		conf = &config{
+			Listener:    *addr,
+			AddressPool: *ipPool,
+		}
+	} else {
+		var err error
+		conf, err = loadConfigFile(flag.Arg(0))
+		if err != nil {
+			log.Printf("Could not read configuration file: %v", err)
+			os.Exit(1)
+		}
+	}
+
+	s, err := NewServer(conf)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Listening on %v", *addr)
+	log.Printf("Listening on %v", conf.Listener)
 
 	waitInterrupt()
 	if err := s.Close(); err != nil {

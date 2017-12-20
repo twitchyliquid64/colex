@@ -15,6 +15,7 @@ import (
 
 // Server represents the running state of colexd.
 type Server struct {
+	config *config
 	ipPool *controller.IPPool
 	serv   *http.Server
 
@@ -30,12 +31,12 @@ type Server struct {
 }
 
 // NewServer initialises a new container host.
-func NewServer(listener, subnet string) (*Server, error) {
+func NewServer(c *config) (*Server, error) {
 	if err := networkSetup(); err != nil {
 		return nil, err
 	}
 
-	ipPool, err := controller.NewIPPool(subnet)
+	ipPool, err := controller.NewIPPool(c.AddressPool)
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +47,9 @@ func NewServer(listener, subnet string) (*Server, error) {
 		done:           make(chan bool, 1),
 		siloDoneNotify: make(chan string),
 		serv: &http.Server{
-			Addr: listener,
+			Addr: c.Listener,
 		},
+		config: c,
 	}
 	s.serv.Handler = s
 
@@ -248,11 +250,21 @@ func describeInterfaces(silo *controller.Silo) []wire.Interface {
 func (s *Server) resolveBase(base string, builder *controller.Options) error {
 	switch base {
 	case "img://busybox":
-		builder.AddFS(&controller.BusyboxBase{})
-		return nil
-	default:
-		return errors.New("unknown silo base")
+		return builder.AddFS(&controller.BusyboxBase{})
 	}
+
+	for i, img := range s.config.Images {
+		if ("img://" + img.Name) == base {
+			switch img.Type {
+			case "tarball":
+				return builder.AddFS(&controller.TarballBase{TarballPath: img.Path})
+			default:
+				return fmt.Errorf("image %d has unknown type %q", i, img.Type)
+			}
+		}
+	}
+
+	return errors.New("unknown silo base")
 }
 
 // resolveFiles sets up the builder to place files in the silo's filesystem on initialization.
