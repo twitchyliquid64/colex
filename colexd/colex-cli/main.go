@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -25,17 +24,46 @@ type command struct {
 }
 
 var commands = map[string]command{
+	"down": command{
+		minArgs: 2,
+		handler: downCommand,
+	},
 	"up": command{
 		minArgs: 2,
 		handler: upCommand,
 	},
 }
 
-func upCommand(args []string) error {
-	if *serv == "" {
-		return errors.New("expected 'serv' flag")
+func downCommand(args []string) error {
+	c, err := siloconf.LoadSiloFile(args[0])
+	if err != nil {
+		return fmt.Errorf("could not load silo configuration: %v", err)
 	}
 
+	for _, silo := range c.Silos {
+		pkt := wire.DownPacket{SiloName: silo.Name}
+		var buf bytes.Buffer
+		if err2 := gob.NewEncoder(&buf).Encode(pkt); err2 != nil {
+			return fmt.Errorf("encode error: %v", err2)
+		}
+
+		resp, err := http.Post("http://"+*serv+"/down", "application/gob", &buf)
+		if err != nil {
+			return fmt.Errorf("rpc failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			d, _ := ioutil.ReadAll(resp.Body)
+			fmt.Printf("%q down RPC failed: status=%q, error=%q\n", silo.Name, resp.Status, string(d))
+			continue
+		}
+
+		fmt.Printf("%q down successfully (status=%s).\n", silo.Name, resp.Status)
+	}
+	return nil
+}
+
+func upCommand(args []string) error {
 	c, err := siloconf.LoadSiloFile(args[0])
 	if err != nil {
 		return fmt.Errorf("could not load silo configuration: %v", err)
@@ -61,7 +89,7 @@ func upCommand(args []string) error {
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
 			d, _ := ioutil.ReadAll(resp.Body)
-			tableOutput = append(tableOutput, []string{silo.Name, "", "Error: " + string(d), "", ""})
+			tableOutput = append(tableOutput, []string{silo.Name, "", "Error: " + string(d), ""})
 			fmt.Printf("%q up RPC failed: status=%q, error=%q\n", silo.Name, resp.Status, string(d))
 			continue
 		}
@@ -135,6 +163,9 @@ func main() {
 
 	if flag.NArg() < 2 {
 		fmt.Println("Error: expected at least 2 arguments")
+	}
+	if *serv == "" {
+		errorOut("Expected 'serv' flag")
 	}
 
 	c, ok := commands[flag.Arg(flag.NArg()-1)]

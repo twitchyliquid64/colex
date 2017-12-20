@@ -106,12 +106,63 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch req.URL.Path {
 	case "/up":
 		s.siloUpHandler(w, req)
+	case "/down":
+		s.siloDownHandler(w, req)
 	}
 }
 
 func httpErr(w http.ResponseWriter, code int, msg string) {
 	w.WriteHeader(code)
 	w.Write([]byte(msg))
+}
+
+// siloDownHandler handles a DOWN RPC.
+func (s *Server) siloDownHandler(w http.ResponseWriter, req *http.Request) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	var downPkt wire.DownPacket
+	if err := gob.NewDecoder(req.Body).Decode(&downPkt); err != nil {
+		log.Printf("DownPacket.Decode() err: %v", err)
+		httpErr(w, http.StatusBadRequest, "Decode error")
+		return
+	}
+
+	// validate - cant have silo name AND silo ID set
+	if downPkt.SiloID != "" && downPkt.SiloName != "" {
+		log.Printf("Bad Down RPC: Can't have multiple selectors (ID & Name)")
+		httpErr(w, http.StatusBadRequest, "Illegal combination of selectors - both name and ID set.")
+		return
+	}
+
+	if downPkt.SiloID != "" {
+		// find the silo with that ID.
+		var siloName string
+		for name, silo := range s.silos {
+			if silo.IDHex == downPkt.SiloID {
+				siloName = name
+				break
+			}
+		}
+		if siloName == "" {
+			log.Printf("Bad Down RPC: Could not find silo with ID %q", downPkt.SiloID)
+			httpErr(w, http.StatusBadRequest, "Could not find silo.")
+			return
+		}
+		if err := s.stopSiloInternal(siloName); err != nil {
+			log.Printf("stopSiloInternal(%q) err: %v", siloName, err)
+			httpErr(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	if downPkt.SiloName != "" {
+		if err := s.stopSiloInternal(downPkt.SiloName); err != nil {
+			log.Printf("stopSiloInternal(%q) err: %v", downPkt.SiloName, err)
+			httpErr(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
 }
 
 // siloUpHandler handles an UP RPC.
