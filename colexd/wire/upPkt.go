@@ -17,3 +17,16 @@ type File struct {
 	SiloPath  string
 	Data      []byte
 }
+
+// UpPacketResponse encodes information about a new silo
+type UpPacketResponse struct {
+	IDHex      string
+	Interfaces []Interface
+}
+
+// Interface encodes information about an interface
+type Interface struct {
+	Name    string
+	Address string
+	Kind    string
+}

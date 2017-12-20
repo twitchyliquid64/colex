@@ -10,8 +10,13 @@ import (
 	"github.com/twitchyliquid64/colex"
 )
 
+// InterfaceInfo represents information about a interface.
+type InterfaceInfo struct {
+	Address, Name, Kind string
+}
+
 type interf interface {
-	Name(*Silo) (string, error)
+	Info() []InterfaceInfo
 	SiloSetup(*Silo, int) ([]StartupCommand, error)
 	Setup(*exec.Cmd, *Silo, int) error
 	Teardown(*Silo) error
@@ -25,9 +30,13 @@ type addressFreeer interface {
 type LoopbackInterface struct {
 }
 
-// Name implements the interf interface.
-func (i *LoopbackInterface) Name(*Silo) (string, error) {
-	return "lo", nil
+// Info implements the interf interface.
+func (i *LoopbackInterface) Info() []InterfaceInfo {
+	return []InterfaceInfo{InterfaceInfo{
+		Address: "127.0.0.1",
+		Name:    "lo",
+		Kind:    "loopback",
+	}}
 }
 
 // SiloSetup implements the interf interface.
@@ -69,9 +78,24 @@ type IPInterface struct {
 	ipt *iptables.IPTables
 }
 
-// Name implements the interf interface.
-func (i *IPInterface) Name(*Silo) (string, error) {
-	return "NOTIMPLEMENTED", nil
+// Info implements the interf interface.
+func (i *IPInterface) Info() []InterfaceInfo {
+	return []InterfaceInfo{
+		InterfaceInfo{
+			Address: i.BridgeIP.String(),
+			Name:    i.bridgeName,
+			Kind:    "bridge",
+		},
+		InterfaceInfo{
+			Name: i.hostVeth,
+			Kind: "host-veth",
+		},
+		InterfaceInfo{
+			Address: i.SiloIP.String(),
+			Name:    i.siloVeth,
+			Kind:    "silo-veth",
+		},
+	}
 }
 
 // SiloSetup implements the interf interface.

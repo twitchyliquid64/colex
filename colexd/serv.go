@@ -103,11 +103,15 @@ func (s *Server) collectorRoutine() {
 // ServeHTTP is called when a web request is recieved.
 func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	//TODO: Authenticate requests
-	//TODO: Handlers write error code on failure.
 	switch req.URL.Path {
 	case "/up":
 		s.siloUpHandler(w, req)
 	}
+}
+
+func httpErr(w http.ResponseWriter, code int, msg string) {
+	w.WriteHeader(code)
+	w.Write([]byte(msg))
 }
 
 // siloUpHandler handles an UP RPC.
@@ -118,6 +122,7 @@ func (s *Server) siloUpHandler(w http.ResponseWriter, req *http.Request) {
 	var upPkt wire.UpPacket
 	if err := gob.NewDecoder(req.Body).Decode(&upPkt); err != nil {
 		log.Printf("UpPacket.Decode() err: %v", err)
+		httpErr(w, http.StatusBadRequest, "Decode error")
 		return
 	}
 
@@ -125,13 +130,30 @@ func (s *Server) siloUpHandler(w http.ResponseWriter, req *http.Request) {
 	if _, ok := s.silos[upPkt.SiloConf.Name]; ok {
 		if err := s.stopSiloInternal(upPkt.SiloConf.Name); err != nil {
 			log.Printf("stopSiloInternal(%q) err: %v", upPkt.SiloConf.Name, err)
+			httpErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 
 	if err := s.startSiloInternal(&upPkt); err != nil {
 		log.Printf("startSiloInternal(%q) err: %v", upPkt.SiloConf.Name, err)
+		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	silo := s.silos[upPkt.SiloConf.Name]
+	responsePkt := wire.UpPacketResponse{IDHex: silo.IDHex}
+	for _, i := range silo.Interfaces {
+		for _, d := range i.Info() {
+			responsePkt.Interfaces = append(responsePkt.Interfaces, wire.Interface{
+				Address: d.Address,
+				Name:    d.Name,
+				Kind:    d.Kind,
+			})
+		}
+	}
+	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
+		log.Printf("up RPC encode(%q) err: %v", upPkt.SiloConf.Name, err)
 	}
 }
 
