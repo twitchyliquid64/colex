@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/gob"
 	"flag"
 	"fmt"
@@ -38,6 +39,14 @@ var commands = map[string]command{
 	},
 }
 
+func client() (*http.Client, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	return client, nil
+}
+
 func listCommand(args []string) error {
 	pkt := wire.ListPacketRequest{}
 	var buf bytes.Buffer
@@ -45,7 +54,11 @@ func listCommand(args []string) error {
 		return fmt.Errorf("encode error: %v", err2)
 	}
 
-	resp, err := http.Post("http://"+*serv+"/list", "application/gob", &buf)
+	client, err := client()
+	if err != nil {
+		return err
+	}
+	resp, err := client.Post("https://"+*serv+"/list", "application/gob", &buf)
 	if err != nil {
 		return fmt.Errorf("rpc failed: %v", err)
 	}
@@ -100,7 +113,11 @@ func downCommand(args []string) error {
 			return fmt.Errorf("encode error: %v", err2)
 		}
 
-		resp, err := http.Post("http://"+*serv+"/down", "application/gob", &buf)
+		client, err := client()
+		if err != nil {
+			return err
+		}
+		resp, err := client.Post("https://"+*serv+"/down", "application/gob", &buf)
 		if err != nil {
 			return fmt.Errorf("rpc failed: %v", err)
 		}
@@ -135,7 +152,11 @@ func upCommand(args []string) error {
 			return fmt.Errorf("encode error: %v", err2)
 		}
 
-		resp, err := http.Post("http://"+*serv+"/up", "application/gob", &buf)
+		client, err := client()
+		if err != nil {
+			return err
+		}
+		resp, err := client.Post("https://"+*serv+"/up", "application/gob", &buf)
 		if err != nil {
 			return fmt.Errorf("rpc failed: %v", err)
 		}

@@ -23,6 +23,7 @@ func main() {
 			Listener:    *addr,
 			AddressPool: *ipPool,
 		}
+		conf.TransportSecurity.KeySource = KeySourceEphemeralKeys
 	} else {
 		var err error
 		conf, err = loadConfigFile(flag.Arg(0))
@@ -30,6 +31,11 @@ func main() {
 			log.Printf("Could not read configuration file: %v", err)
 			os.Exit(1)
 		}
+	}
+
+	if err := validateConfig(conf); err != nil {
+		log.Printf("Configuration error: %v", err)
+		os.Exit(1)
 	}
 
 	s, err := NewServer(conf)

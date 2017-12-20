@@ -1,14 +1,17 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/twitchyliquid64/colex"
+	"github.com/twitchyliquid64/colex/colexd/cert"
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/controller"
 )
@@ -32,10 +35,6 @@ type Server struct {
 
 // NewServer initialises a new container host.
 func NewServer(c *config) (*Server, error) {
-	if err := networkSetup(); err != nil {
-		return nil, err
-	}
-
 	ipPool, err := controller.NewIPPool(c.AddressPool)
 	if err != nil {
 		return nil, err
@@ -52,12 +51,54 @@ func NewServer(c *config) (*Server, error) {
 		config: c,
 	}
 	s.serv.Handler = s
+	tlsConf, err := makeTLSConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	s.serv.TLSConfig = tlsConf
+
+	if err := networkSetup(); err != nil {
+		return nil, err
+	}
 
 	go s.collectorRoutine()
 	// TODO: channel here to sync till goroutines are ready.
-	go s.serv.ListenAndServe()
+	go s.serv.ListenAndServeTLS("", "")
 
 	return s, nil
+}
+
+func makeTLSConfig(c *config) (*tls.Config, error) {
+	var certificate tls.Certificate
+	var err error
+
+	switch c.TransportSecurity.KeySource {
+	case KeySourceEphemeralKeys:
+		log.Println("Minting tls key...")
+		certPEM, keyPEM, err2 := cert.MakeServerCert()
+		if err2 != nil {
+			return nil, err2
+		}
+		if certificate, err = tls.X509KeyPair(certPEM, keyPEM); err != nil {
+			return nil, err
+		}
+		fmt.Println("\nAdd this section to your configuration file: ")
+		fmt.Println("transport_security {")
+		fmt.Printf("  key_source = \"embedded\"\n")
+		fmt.Printf("  embedded_cert = \"%s\"\n", strings.Replace(string(certPEM), "\n", "\\n", -1))
+		fmt.Printf("  embedded_key = \"%s\"\n", strings.Replace(string(keyPEM), "\n", "\\n", -1))
+		fmt.Printf("}\n\n")
+	case KeySourceEmbeddedKeys:
+		if certificate, err = tls.X509KeyPair([]byte(c.TransportSecurity.CertPEM), []byte(c.TransportSecurity.KeyPEM)); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("dont know how to handle KeySource %q", c.TransportSecurity.KeySource)
+	}
+	tlsConfig := tls.Config{
+		Certificates: []tls.Certificate{certificate},
+	}
+	return &tlsConfig, nil
 }
 
 // Close shuts down the server, terminating and releasing all resources.
@@ -256,7 +297,7 @@ func (s *Server) resolveBase(base string, builder *controller.Options) error {
 	for i, img := range s.config.Images {
 		if ("img://" + img.Name) == base {
 			switch img.Type {
-			case "tarball":
+			case TarballImage:
 				return builder.AddFS(&controller.TarballBase{TarballPath: img.Path})
 			default:
 				return fmt.Errorf("image %d has unknown type %q", i, img.Type)

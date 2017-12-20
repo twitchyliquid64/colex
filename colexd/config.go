@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 
@@ -15,7 +17,25 @@ type config struct {
 	AddressPool string `hcl:"address_pool"`
 
 	Images []Image `hcl:"image"`
+
+	TransportSecurity struct {
+		KeySource string `hcl:"key_source"`
+
+		CertPEM string `hcl:"embedded_cert"`
+		KeyPEM  string `hcl:"embedded_key"`
+	} `hcl:"transport_security"`
 }
+
+// valid transport_security key_source
+const (
+	KeySourceEphemeralKeys = "ephemeral"
+	KeySourceEmbeddedKeys  = "embedded"
+)
+
+// valid image types
+const (
+	TarballImage = "tarball"
+)
 
 // Image maps a image name to the base file tarball./zip.
 type Image struct {
@@ -49,16 +69,33 @@ func loadConfig(data []byte) (*config, error) {
 		log.Printf("Overriding config value for address_pool to %q", *ipPool)
 		c.AddressPool = *ipPool
 	}
-
-	// basic checks
-	if c.AddressPool == "" {
-		return nil, errors.New("address_pool must be set")
-	}
-	if c.Listener == "" {
-		return nil, errors.New("listener must be set")
+	if c.TransportSecurity.KeySource == "" {
+		c.TransportSecurity.KeySource = KeySourceEphemeralKeys
 	}
 
 	return &c, nil
+}
+
+func validateConfig(c *config) error {
+	// valid TransportSecurity settings
+	switch c.TransportSecurity.KeySource {
+	case KeySourceEphemeralKeys:
+	case KeySourceEmbeddedKeys:
+		if _, err := tls.X509KeyPair([]byte(c.TransportSecurity.CertPEM), []byte(c.TransportSecurity.KeyPEM)); err != nil {
+			return fmt.Errorf("bad embedded key: %v", err)
+		}
+	default:
+		return errors.New("unknown key_source")
+	}
+
+	// basic checks
+	if c.AddressPool == "" {
+		return errors.New("address_pool (flag --ip-pool) must be set")
+	}
+	if c.Listener == "" {
+		return errors.New("listener must be set")
+	}
+	return nil
 }
 
 func loadConfigFile(fpath string) (*config, error) {
