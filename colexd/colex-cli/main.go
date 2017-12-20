@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/twitchyliquid64/colex/colexd/wire"
@@ -24,6 +25,9 @@ type command struct {
 }
 
 var commands = map[string]command{
+	"list": command{
+		handler: listCommand,
+	},
 	"down": command{
 		minArgs: 2,
 		handler: downCommand,
@@ -32,6 +36,55 @@ var commands = map[string]command{
 		minArgs: 2,
 		handler: upCommand,
 	},
+}
+
+func listCommand(args []string) error {
+	pkt := wire.ListPacketRequest{}
+	var buf bytes.Buffer
+	if err2 := gob.NewEncoder(&buf).Encode(pkt); err2 != nil {
+		return fmt.Errorf("encode error: %v", err2)
+	}
+
+	resp, err := http.Post("http://"+*serv+"/list", "application/gob", &buf)
+	if err != nil {
+		return fmt.Errorf("rpc failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		d, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("list RPC failed: status=%q, error=%q", resp.Status, string(d))
+	}
+
+	var responsePkt wire.ListPacket
+	if err := gob.NewDecoder(resp.Body).Decode(&responsePkt); err != nil {
+		return fmt.Errorf("response decode failed: %v", err)
+	}
+
+	var tableData [][]string
+	for i, silo := range responsePkt.Matches {
+		tableData = append(tableData, []string{
+			silo.Name,
+			fmt.Sprintf("%s (%d)", silo.IDHex, i),
+			silo.Class,
+			strings.Join(silo.Tags, ","),
+			"",
+		})
+
+		var addresses []string
+		for _, intf := range filterSysInterfaces(silo.Interfaces) {
+			addresses = append(addresses, intf.Address)
+		}
+		tableData[len(tableData)-1][4] = strings.Join(addresses, ", ")
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "ID (#)", "Class", "Tags", "Addresses"})
+	table.SetAutoMergeCells(true)
+	table.SetCenterSeparator("|")
+	table.AppendBulk(tableData)
+	table.Render()
+	return nil
 }
 
 func downCommand(args []string) error {
@@ -100,7 +153,7 @@ func upCommand(args []string) error {
 		}
 
 		var interfaceInfo string
-		ins := filterNonSysInterfaces(responsePkt.Interfaces)
+		ins := filterSysInterfaces(responsePkt.Interfaces)
 		for i, intf := range ins {
 			interfaceInfo += intf.Name
 			if intf.Address != "" {
@@ -122,7 +175,7 @@ func upCommand(args []string) error {
 	return nil
 }
 
-func filterNonSysInterfaces(in []wire.Interface) []wire.Interface {
+func filterSysInterfaces(in []wire.Interface) []wire.Interface {
 	var out []wire.Interface
 	for i := range in {
 		if in[i].Kind == "loopback" || in[i].Kind == "host-veth" || in[i].Kind == "bridge" {
@@ -161,8 +214,8 @@ func errorOut(err string) {
 func main() {
 	flag.Parse()
 
-	if flag.NArg() < 2 {
-		fmt.Println("Error: expected at least 2 arguments")
+	if flag.NArg() < 1 {
+		fmt.Println("Error: expected command")
 	}
 	if *serv == "" {
 		errorOut("Expected 'serv' flag")

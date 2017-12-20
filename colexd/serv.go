@@ -108,12 +108,44 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.siloUpHandler(w, req)
 	case "/down":
 		s.siloDownHandler(w, req)
+	case "/list":
+		s.listSilosHandler(w, req)
+	default:
+		httpErr(w, http.StatusNotFound, "No such endpoint")
 	}
 }
 
 func httpErr(w http.ResponseWriter, code int, msg string) {
 	w.WriteHeader(code)
 	w.Write([]byte(msg))
+}
+
+func (s *Server) listSilosHandler(w http.ResponseWriter, req *http.Request) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	var listReqPkt wire.ListPacketRequest
+	if err := gob.NewDecoder(req.Body).Decode(&listReqPkt); err != nil {
+		log.Printf("ListPacketRequest.Decode() err: %v", err)
+		httpErr(w, http.StatusBadRequest, "Decode error")
+		return
+	}
+
+	var silos []wire.Silo
+	for name, silo := range s.silos {
+		silos = append(silos, wire.Silo{
+			Name:       name,
+			Class:      silo.Class,
+			Tags:       silo.Tags,
+			IDHex:      silo.IDHex,
+			Interfaces: describeInterfaces(silo),
+		})
+	}
+
+	responsePkt := wire.ListPacket{Matches: silos}
+	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
+		log.Printf("list RPC encode err: %v", err)
+	}
 }
 
 // siloDownHandler handles a DOWN RPC.
@@ -193,19 +225,24 @@ func (s *Server) siloUpHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	silo := s.silos[upPkt.SiloConf.Name]
-	responsePkt := wire.UpPacketResponse{IDHex: silo.IDHex}
+	responsePkt := wire.UpPacketResponse{IDHex: silo.IDHex, Interfaces: describeInterfaces(silo)}
+	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
+		log.Printf("up RPC encode(%q) err: %v", upPkt.SiloConf.Name, err)
+	}
+}
+
+func describeInterfaces(silo *controller.Silo) []wire.Interface {
+	var out []wire.Interface
 	for _, i := range silo.Interfaces {
 		for _, d := range i.Info() {
-			responsePkt.Interfaces = append(responsePkt.Interfaces, wire.Interface{
+			out = append(out, wire.Interface{
 				Address: d.Address,
 				Name:    d.Name,
 				Kind:    d.Kind,
 			})
 		}
 	}
-	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
-		log.Printf("up RPC encode(%q) err: %v", upPkt.SiloConf.Name, err)
-	}
+	return out
 }
 
 func (s *Server) resolveBase(base string, builder *controller.Options) error {

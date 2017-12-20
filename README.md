@@ -56,16 +56,33 @@ Explanation:
  * Each `file` section allows you to specify files on your current system which will be dropped in the silo. The `main script` block references a file on your system `test-script.sh` which will be dropped at `/script.sh`.
  * The `network` section lets you configure networking within the silo. If `internet_access` is set to true, iptables MASQUERADE rules + routing table entries will exist to allow the silo to access the internet through the host.
 
-Run:
+To Start:
 
 ```shell
 ./colex-cli --serv <colexd address> <silo-file> up
+
+|-----------|----------|-------|---------------------------|
+|   SILO    |    ID    | STATE |        INTERFACES         |
+|-----------|----------|-------|---------------------------|
+| test-sh   | 3938a44e | UP    | v0-3938a44es (10.69.69.2) |
+|-----------|----------|-------|---------------------------|
 ```
 
 To stop:
 
 ```shell
 ./colex-cli --serv <colexd address> <silo-file> down
+```
+
+To see whats running:
+
+```shell
+./colex-cli --serv localhost:8080 list
+|-----------|--------------|-------|------|------------|
+|   NAME    |    ID ()     | CLASS | TAGS | ADDRESSES  |
+|-----------|--------------|-------|------|------------|
+| test-ping | 7d462601 (0) |       |      | 10.69.69.2 |
+|-----------|--------------|-------|------|------------|
 ```
 
 # credit
