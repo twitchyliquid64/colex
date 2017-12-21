@@ -358,10 +358,18 @@ func (s *Server) resolveBase(base string, builder *controller.Options) error {
 // TODO: support tarball.
 func (s *Server) resolveFiles(files []wire.File, builder *controller.Options) error {
 	for _, file := range files {
-		builder.AddFS(&controller.FileLoaderBase{
-			RemotePath: file.SiloPath,
-			Data:       file.Data,
-		})
+		switch file.Type {
+		case "tarball":
+			builder.AddFS(&controller.FileLoaderTarballBase{
+				RemotePath: file.SiloPath,
+				Data:       file.Data,
+			})
+		default:
+			builder.AddFS(&controller.FileLoaderBase{
+				RemotePath: file.SiloPath,
+				Data:       file.Data,
+			})
+		}
 	}
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -325,6 +326,19 @@ func packUpPacket(c *siloconf.Silo) (*wire.UpPacket, error) {
 			return nil, fmt.Errorf("could not read file resource: %v", err)
 		}
 		p.Files = append(p.Files, wire.File{
+			LocalPath: f.Path,
+			SiloPath:  f.SiloPath,
+			Data:      d,
+		})
+	}
+
+	for _, f := range c.FileBalls {
+		d, err := exec.Command("tar", "-c", f.Path).Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build tarball: %v", err)
+		}
+		p.Files = append(p.Files, wire.File{
+			Type:      "tarball",
 			LocalPath: f.Path,
 			SiloPath:  f.SiloPath,
 			Data:      d,

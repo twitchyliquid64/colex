@@ -13,6 +13,7 @@ type UpPacket struct {
 
 // File encapsulates details representing a file in a silo.
 type File struct {
+	Type      string
 	LocalPath string
 	SiloPath  string
 	Data      []byte

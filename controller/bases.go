@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -97,5 +98,35 @@ func (f *FileLoaderBase) Setup(c *exec.Cmd, s *Silo) error {
 
 // Teardown implements base.
 func (f *FileLoaderBase) Teardown(*Silo) error {
+	return nil
+}
+
+// FileLoaderTarballBase places files from a tarball at a path on the filesystem.
+type FileLoaderTarballBase struct {
+	RemotePath string
+	Data       []byte
+}
+
+// Setup implements base.
+func (f *FileLoaderTarballBase) Setup(c *exec.Cmd, s *Silo) error {
+	defer func() {
+		f.Data = nil // let it be collected if there are no other references
+	}()
+
+	outputPath := filepath.Join(s.Root, f.RemotePath)
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputPath, 0777); err != nil {
+			return err
+		}
+	}
+
+	tarCmd := exec.Command("tar", "--overwrite", "-C", outputPath, "-xf", "-")
+	tarCmd.Stdin = bytes.NewReader(f.Data)
+	tarCmd.Stdout = os.Stdout
+	return tarCmd.Run()
+}
+
+// Teardown implements base.
+func (f *FileLoaderTarballBase) Teardown(*Silo) error {
 	return nil
 }

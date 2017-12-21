@@ -21,7 +21,8 @@ type Silo struct {
 
 	Binary Binary
 
-	Files map[string]File `hcl:"file"`
+	Files     map[string]File `hcl:"file"`
+	FileBalls map[string]File `hcl:"files"`
 }
 
 // File represents configuration for a silo file resource to be put into the
