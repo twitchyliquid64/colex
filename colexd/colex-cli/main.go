@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/gob"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -39,9 +41,40 @@ var commands = map[string]command{
 	},
 }
 
+func prompt(msg string) string {
+	var out string
+	fmt.Printf("%s ", msg)
+	if _, err := fmt.Scanln(&out); err != nil {
+		return ""
+	}
+	return out
+}
+
 func client() (*http.Client, error) {
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{
+			VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+				pinned, err := getPinnedCert(*serv)
+				if err != nil {
+					if os.IsNotExist(err) {
+						fmt.Printf("Warning: no pinned certificate for %s.\n", *serv)
+						if strings.ContainsAny(prompt("Would you like to proceed? [y/N]:"), "yY") {
+							return pinCertificate(*serv, rawCerts[0])
+						}
+						return errors.New("no pinned certificate available")
+					}
+					return err
+				}
+
+				for _, c := range rawCerts {
+					if bytes.Equal(c, pinned) {
+						return nil
+					}
+				}
+				return errors.New("pinned certificate mismatch")
+			},
+			InsecureSkipVerify: true,
+		},
 	}
 	client := &http.Client{Transport: tr}
 	return client, nil
