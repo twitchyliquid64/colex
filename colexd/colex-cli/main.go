@@ -10,10 +10,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/twitchyliquid64/colex/colexd/cert"
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/siloconf"
 )
@@ -39,6 +43,10 @@ var commands = map[string]command{
 		minArgs: 2,
 		handler: upCommand,
 	},
+	"enroll": command{
+		minArgs: 1,
+		handler: enrollCommand,
+	},
 }
 
 func prompt(msg string) string {
@@ -50,7 +58,49 @@ func prompt(msg string) string {
 	return out
 }
 
+func getClientCert() (*tls.Certificate, error) {
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	basePath := filepath.Join(u.HomeDir, ".colex")
+	c, err := tls.LoadX509KeyPair(filepath.Join(basePath, "cert.pem"), filepath.Join(basePath, "key.pem"))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+
+		if _, err := os.Stat(filepath.Join(u.HomeDir, ".colex")); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+			if err := os.MkdirAll(filepath.Join(u.HomeDir, ".colex"), 0755); err != nil {
+				return nil, err
+			}
+		}
+
+		fmt.Println("Creating client certificate...")
+		certPEM, keyPEM, err := cert.MakeServerCert()
+		if err != nil {
+			return nil, err
+		}
+		if err := ioutil.WriteFile(filepath.Join(basePath, "cert.pem"), certPEM, 0700); err != nil {
+			return nil, err
+		}
+		if err := ioutil.WriteFile(filepath.Join(basePath, "key.pem"), keyPEM, 0700); err != nil {
+			return nil, err
+		}
+		return getClientCert()
+	}
+	return &c, nil
+}
+
 func client() (*http.Client, error) {
+	cert, err := getClientCert()
+	if err != nil {
+		return nil, err
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
@@ -74,10 +124,34 @@ func client() (*http.Client, error) {
 				return errors.New("pinned certificate mismatch")
 			},
 			InsecureSkipVerify: true,
+			Certificates:       []tls.Certificate{*cert},
 		},
 	}
 	client := &http.Client{Transport: tr}
 	return client, nil
+}
+
+func enrollCommand(args []string) error {
+	key := prompt("Enrollment key: ")
+	name := prompt("Name: ")
+
+	client, err := client()
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse("https://" + *serv + "/enroll?key=" + key + "&name=" + name)
+	fmt.Println(u)
+
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return fmt.Errorf("enrollment failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		d, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("enroll RPC failed: status=%q, error=%q", resp.Status, string(d))
+	}
+
+	return nil
 }
 
 func listCommand(args []string) error {

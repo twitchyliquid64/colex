@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
@@ -24,7 +25,19 @@ type config struct {
 		CertPEM string `hcl:"embedded_cert"`
 		KeyPEM  string `hcl:"embedded_key"`
 	} `hcl:"transport_security"`
+
+	Authentication struct {
+		Mode                  string `hcl:"mode"`
+		BlindEnrollmentWindow int    `hcl:"blind_enrollment_seconds"`
+		CertsFile             string `hcl:"certs_file"`
+	}
 }
+
+// valid Authentication modes
+const (
+	AuthModeOpen     = "open"
+	AuthModeCertfile = "certs-file"
+)
 
 // valid transport_security key_source
 const (
@@ -72,6 +85,13 @@ func loadConfig(data []byte) (*config, error) {
 	if c.TransportSecurity.KeySource == "" {
 		c.TransportSecurity.KeySource = KeySourceEphemeralKeys
 	}
+	if c.Authentication.Mode == "" {
+		log.Println("Warning: Open authentication mode means anyone on your network can issue commands!")
+		c.Authentication.Mode = AuthModeOpen
+	}
+	if c.Authentication.BlindEnrollmentWindow == 0 {
+		c.Authentication.BlindEnrollmentWindow = 35
+	}
 
 	return &c, nil
 }
@@ -94,6 +114,16 @@ func validateConfig(c *config) error {
 	}
 	if c.Listener == "" {
 		return errors.New("listener must be set")
+	}
+
+	switch c.Authentication.Mode {
+	case AuthModeOpen:
+	case AuthModeCertfile:
+		if _, err := os.Stat(c.Authentication.CertsFile); err != nil {
+			return err
+		}
+	default:
+		return errors.New("unknown authentication mode")
 	}
 	return nil
 }

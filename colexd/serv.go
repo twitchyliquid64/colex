@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -9,11 +10,13 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/twitchyliquid64/colex"
 	"github.com/twitchyliquid64/colex/colexd/cert"
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/controller"
+	"github.com/twitchyliquid64/colex/util"
 )
 
 // Server represents the running state of colexd.
@@ -27,6 +30,9 @@ type Server struct {
 	closing bool
 	wg      sync.WaitGroup
 	done    chan bool
+
+	blindEnrollmentDeadline time.Time
+	blindEnrollmentKey      string
 
 	siloDoneNotify chan string
 
@@ -56,6 +62,16 @@ func NewServer(c *config) (*Server, error) {
 		return nil, err
 	}
 	s.serv.TLSConfig = tlsConf
+
+	if c.Authentication.Mode == AuthModeCertfile && c.Authentication.BlindEnrollmentWindow != -1 {
+		s.blindEnrollmentDeadline = time.Now().Add(time.Duration(c.Authentication.BlindEnrollmentWindow) * time.Second)
+		b, err := util.RandBytes(8)
+		if err != nil {
+			return nil, err
+		}
+		s.blindEnrollmentKey = base64.URLEncoding.EncodeToString(b)
+		log.Printf("enroll enabled for %d seconds, using key %q.", c.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
+	}
 
 	if err := networkSetup(); err != nil {
 		return nil, err
@@ -97,6 +113,7 @@ func makeTLSConfig(c *config) (*tls.Config, error) {
 	}
 	tlsConfig := tls.Config{
 		Certificates: []tls.Certificate{certificate},
+		ClientAuth:   tls.RequestClientCert,
 	}
 	return &tlsConfig, nil
 }
@@ -145,8 +162,21 @@ func (s *Server) collectorRoutine() {
 
 // ServeHTTP is called when a web request is recieved.
 func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	//TODO: Authenticate requests
+	user, err := checkAuthorized(s.config, req)
+	if err == errNotAuthorized {
+		httpErr(w, http.StatusForbidden, "Not authorized")
+		log.Printf("Unauthorized request for %q was aborted.", req.URL.Path)
+		return
+	}
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, "Internal server error")
+		log.Printf("checkAuthorized(%q) = %+v, error = %v", req.URL.Path, user, err)
+		return
+	}
+
 	switch req.URL.Path {
+	case "/enroll":
+		s.blindEnrollHandler(w, req)
 	case "/up":
 		s.siloUpHandler(w, req)
 	case "/down":
@@ -155,6 +185,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.listSilosHandler(w, req)
 	default:
 		httpErr(w, http.StatusNotFound, "No such endpoint")
+	}
+}
+
+func (s *Server) blindEnrollHandler(w http.ResponseWriter, req *http.Request) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	time.Sleep(50 * time.Millisecond) // delay /w lock to make brute force infeasible
+
+	if time.Now().After(s.blindEnrollmentDeadline) || req.URL.Query().Get("key") != s.blindEnrollmentKey {
+		httpErr(w, http.StatusForbidden, "Failed")
+		return
+	}
+	log.Printf("Now enrolling %q", req.URL.Query().Get("name"))
+	if err := enrollCertificate(req.URL.Query().Get("name"), "default", s.config, req.TLS); err != nil {
+		httpErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 }
 

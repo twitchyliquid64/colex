@@ -24,6 +24,7 @@ func main() {
 			AddressPool: *ipPool,
 		}
 		conf.TransportSecurity.KeySource = KeySourceEphemeralKeys
+		conf.Authentication.Mode = AuthModeOpen
 	} else {
 		var err error
 		conf, err = loadConfigFile(flag.Arg(0))
