@@ -136,6 +136,22 @@ To enroll a client:
 2. Copy paste the enrollment key (not including quotes) - this should have been printed soon after the server started.
 3. Run `colex-cli --serv <addr> enroll` and paste the enrollment key when prompted. But be quick, enrollment is only available by default for 35 seconds! (configurable with `blind_enrollment_seconds` option).
 
+## How to I get other base images?
+
+Docker has a great selection of images, but they need to be exported to a flat tarball before colex can use them.
+
+**EG: busybox**
+
+```shell
+export IMGNAME="busybox"
+
+docker pull $IMGNAME
+docker create $IMGNAME containerz
+docker export $(docker ps --latest --quiet) > "${IMGNAME}.tar"
+docker rm $(docker ps --latest --quiet)
+docker image rm $IMGNAME
+```
+
 # credit
 
 This was exploratory / learning exercise, made with heavy reference to https://www.infoq.com/articles/build-a-container-golang &
