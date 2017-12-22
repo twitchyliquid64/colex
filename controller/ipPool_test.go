@@ -36,7 +36,7 @@ func TestIpPool(t *testing.T) {
 	}
 
 	t.Logf("Freeing: %v", n1)
-	pool.FreeAssignment(n1)
+	pool.FreeAssignment([]net.IP{n1})
 
 	n4, err := pool.Assignment()
 	if err != nil {

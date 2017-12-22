@@ -23,7 +23,7 @@ type interf interface {
 }
 
 type addressFreeer interface {
-	FreeAssignment(net.IP)
+	FreeAssignment([]net.IP)
 }
 
 // LoopbackInterface represents a loopback network device within the silo.
@@ -73,6 +73,7 @@ type IPInterface struct {
 
 	InternetAccess bool
 
+	Slice  ipSlice
 	Freeer addressFreeer
 
 	ipt *iptables.IPTables
@@ -176,8 +177,7 @@ func (i *IPInterface) Setup(cmd *exec.Cmd, s *Silo, index int) error {
 func (i *IPInterface) Teardown(*Silo) error {
 	if !i.isSetup {
 		if i.Freeer != nil {
-			i.Freeer.FreeAssignment(i.BridgeIP)
-			i.Freeer.FreeAssignment(i.SiloIP)
+			i.Freeer.FreeAssignment(i.Slice)
 		}
 		return nil
 	}
@@ -194,8 +194,7 @@ func (i *IPInterface) Teardown(*Silo) error {
 		}
 	}
 	if i.Freeer != nil {
-		i.Freeer.FreeAssignment(i.BridgeIP)
-		i.Freeer.FreeAssignment(i.SiloIP)
+		i.Freeer.FreeAssignment(i.Slice)
 	}
 	return nil
 }

@@ -447,15 +447,13 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 	builder.Env = append(builder.Env, fmt.Sprintf("METADATA_ENDPOINT=%s:%d", network.BridgeIP, metadataPort))
 
 	if err = builder.Finalize(); err != nil {
-		s.ipPool.FreeAssignment(network.BridgeIP)
-		s.ipPool.FreeAssignment(network.SiloIP)
+		s.ipPool.FreeAssignment(network.Slice)
 		return err
 	}
 
 	silo, err := controller.NewSilo(req.SiloConf.Name, &builder)
 	if err != nil {
-		s.ipPool.FreeAssignment(network.BridgeIP)
-		s.ipPool.FreeAssignment(network.SiloIP)
+		s.ipPool.FreeAssignment(network.Slice)
 		return err
 	}
 
@@ -463,8 +461,7 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 		if closeErr := silo.Close(); closeErr != nil {
 			log.Printf("silo.Close() err: %v", err)
 		}
-		s.ipPool.FreeAssignment(network.BridgeIP)
-		s.ipPool.FreeAssignment(network.SiloIP)
+		s.ipPool.FreeAssignment(network.Slice)
 		return err
 	}
 

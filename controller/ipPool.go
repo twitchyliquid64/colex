@@ -29,11 +29,11 @@ func NewIPPool(address string) (*IPPool, error) {
 }
 
 // FreeAssignment returns an IP to the pool.
-func (p *IPPool) FreeAssignment(ip net.IP) {
+func (p *IPPool) FreeAssignment(ip []net.IP) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.free = append(p.free, ip)
+	p.free = append(p.free, ip...)
 }
 
 // Assignment assigns and returns a vacant IP address.
@@ -71,6 +71,7 @@ func (p *IPPool) getNextFromPool() (net.IP, error) {
 }
 
 // IPInterface creates an IP interface definition using free addresses from the pool.
+// Not safe for concurrent access because then addresses will not be sequential.
 func (p *IPPool) IPInterface() (*IPInterface, error) {
 	bridgeIP, err := p.Assignment()
 	if err != nil {
@@ -78,18 +79,32 @@ func (p *IPPool) IPInterface() (*IPInterface, error) {
 	}
 	siloIP, err := p.Assignment()
 	if err != nil {
-		p.FreeAssignment(bridgeIP)
+		p.FreeAssignment([]net.IP{bridgeIP})
+		return nil, err
+	}
+
+	// we are giving each IPInterface a /30, so thats 4 addresses
+	unused1, err := p.Assignment()
+	if err != nil {
+		return nil, err
+	}
+	unused2, err := p.Assignment()
+	if err != nil {
 		return nil, err
 	}
 
 	return &IPInterface{
 		BridgeIP:   bridgeIP,
-		BridgeMask: p.Subnet.Mask,
+		BridgeMask: net.IPMask{255, 255, 255, 252},
 		SiloIP:     siloIP,
-		SiloMask:   p.Subnet.Mask,
+		SiloMask:   net.IPMask{255, 255, 255, 252},
+		Slice:      ipSlice{bridgeIP, siloIP, unused1, unused2},
 		Freeer:     p,
 	}, nil
 }
+
+// An ipSlice represents an allocation of addresses.
+type ipSlice []net.IP
 
 func unicastMask(ip net.IP) net.IPMask {
 	if ip.To4() != nil {
