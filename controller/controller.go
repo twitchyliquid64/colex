@@ -217,7 +217,7 @@ func (s *Silo) IsRunning() bool {
 
 // Close shuts down the silo.
 func (s *Silo) Close() error {
-	if s.State == StateRunning {
+	if s.State == StateRunning && s.child.Process != nil {
 		sigErr := syscall.Kill(s.child.Process.Pid, syscall.Signal(0))
 		if sigErr == nil || sigErr == syscall.EPERM {
 			err := s.child.Process.Kill()
