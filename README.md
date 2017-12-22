@@ -152,6 +152,11 @@ docker rm $(docker ps --latest --quiet)
 docker image rm $IMGNAME
 ```
 
+## Configuration file reference
+
+ - [Server configuration file](https://github.com/twitchyliquid64/colex/blob/master/server%20config%20reference.MD)
+ - [Silo configuration file](https://github.com/twitchyliquid64/colex/blob/master/silo%20configuration%20reference.MD)
+
 # credit
 
 This was exploratory / learning exercise, made with heavy reference to https://www.infoq.com/articles/build-a-container-golang &

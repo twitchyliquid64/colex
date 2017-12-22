@@ -26,6 +26,10 @@ authentication {
   certs_file = "authorized-users"
 }
 
+hostnames = {
+  kek = "1.2.3.4"
+}
+
 ```
 
 **Explanation**
@@ -50,4 +54,4 @@ authentication {
 | *address_pool*       | CIDR representing the starting IP and subnet from which silos are allocated IPs.                                     |
 | *image*              | Image sections specify additional base images which are available.                                                   |
 | *transport_security* | TLS security options for the service.                                                                                |
-| *authentication*     | Details how RPCs/command from `colex-cli` are authorized.                                                            |
+| *hostnames*          | Specify IPv4 addresses which will resolve for the given domain within silos.                                         |
