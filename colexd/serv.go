@@ -21,9 +21,10 @@ import (
 
 // Server represents the running state of colexd.
 type Server struct {
-	config *config
-	ipPool *controller.IPPool
-	serv   *http.Server
+	config          *config
+	ipPool          *controller.IPPool
+	serv            *http.Server
+	metadataService *metadataService
 
 	lock sync.Mutex
 
@@ -34,7 +35,7 @@ type Server struct {
 	blindEnrollmentDeadline time.Time
 	blindEnrollmentKey      string
 
-	siloDoneNotify chan string
+	siloDoneNotify chan siloFinishedInfo
 
 	silos map[string]*controller.Silo
 }
@@ -50,7 +51,7 @@ func NewServer(c *config) (*Server, error) {
 		silos:          make(map[string]*controller.Silo),
 		ipPool:         ipPool,
 		done:           make(chan bool, 1),
-		siloDoneNotify: make(chan string),
+		siloDoneNotify: make(chan siloFinishedInfo),
 		serv: &http.Server{
 			Addr: c.Listener,
 		},
@@ -65,12 +66,17 @@ func NewServer(c *config) (*Server, error) {
 
 	if c.Authentication.Mode == AuthModeCertfile && c.Authentication.BlindEnrollmentWindow != -1 {
 		s.blindEnrollmentDeadline = time.Now().Add(time.Duration(c.Authentication.BlindEnrollmentWindow) * time.Second)
-		b, err := util.RandBytes(8)
-		if err != nil {
-			return nil, err
+		b, err2 := util.RandBytes(8)
+		if err2 != nil {
+			return nil, err2
 		}
 		s.blindEnrollmentKey = base64.URLEncoding.EncodeToString(b)
 		log.Printf("Enroll enabled for %d seconds, using key %q.", c.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
+	}
+
+	s.metadataService, err = newMetadataService(s)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := networkSetup(); err != nil {
@@ -120,10 +126,15 @@ func makeTLSConfig(c *config) (*tls.Config, error) {
 
 // Close shuts down the server, terminating and releasing all resources.
 func (s *Server) Close() error {
+	if err := s.metadataService.Close(); err != nil {
+		return err
+	}
+
 	s.closing = true
 	close(s.siloDoneNotify)
 	close(s.done)
 	s.lock.Lock()
+
 	for name := range s.silos {
 		if err := s.stopSiloInternal(name); err != nil {
 			s.lock.Unlock()
@@ -136,6 +147,12 @@ func (s *Server) Close() error {
 	return s.serv.Close()
 }
 
+type siloFinishedInfo struct {
+	name           string
+	ID             string
+	finishedReason error
+}
+
 // TODO: Collector should gather why it ended (killed, exit status etc) as well, and collector should make the
 // silo.stopSiloInternal invocation decision (based on killed), rather than the Wait() routine.
 func (s *Server) collectorRoutine() {
@@ -146,14 +163,18 @@ func (s *Server) collectorRoutine() {
 		select {
 		case <-s.done:
 			return
-		case siloName, ok := <-s.siloDoneNotify:
+		case silo, ok := <-s.siloDoneNotify:
 			if !ok {
 				return
 			}
 			s.lock.Lock()
-			log.Printf("Collecting silo %q", siloName)
-			if err := s.stopSiloInternal(siloName); err != nil {
-				log.Printf("stopSiloInternal(%q) failed: %v", siloName, err)
+			if storedSilo, ok := s.silos[silo.name]; !ok || (ok && storedSilo.IDHex != silo.ID) {
+				s.lock.Unlock()
+				continue
+			}
+			log.Printf("Collecting silo %q(%q)", silo.name, silo.ID)
+			if err := s.stopSiloInternal(silo.name); err != nil {
+				log.Printf("stopSiloInternal(%q) failed: %v", silo.name, err)
 			}
 			s.lock.Unlock()
 		}
@@ -423,6 +444,7 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 	builder.Interfaces = append(builder.Interfaces, network, &controller.LoopbackInterface{})
 	builder.Nameservers = req.SiloConf.Network.Nameservers
 	builder.HostMap = req.SiloConf.Network.Hosts
+	builder.Env = append(builder.Env, fmt.Sprintf("METADATA_ENDPOINT=%s:%d", network.BridgeIP, metadataPort))
 
 	if err = builder.Finalize(); err != nil {
 		s.ipPool.FreeAssignment(network.BridgeIP)
@@ -454,19 +476,29 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 	}
 
 	s.silos[req.SiloConf.Name] = silo
+	s.metadataService.HostEvent(buildSiloStartedMetadataEvent(silo))
 	go waitNotifySilo(silo, s)
 	return nil
 }
 
-func waitNotifySilo(s *controller.Silo, server *Server) {
-	if err := s.Wait(); err != nil {
-		log.Printf("Silo %q(%q).Wait() error: %v", s.Name, s.IDHex, err)
-		if err.Error() == "signal: killed" {
-			return //its already stopped
-		}
+func buildSiloStartedMetadataEvent(silo *controller.Silo) *metadataEvent {
+	return &metadataEvent{
+		event:      eventSiloStarted,
+		ID:         silo.IDHex,
+		Name:       silo.Name,
+		tags:       silo.Tags,
+		interfaces: describeInterfaces(silo),
 	}
+}
+
+func waitNotifySilo(s *controller.Silo, server *Server) {
+	err := s.Wait()
 	if !server.closing {
-		server.siloDoneNotify <- s.Name
+		server.siloDoneNotify <- siloFinishedInfo{
+			ID:             s.IDHex,
+			name:           s.Name,
+			finishedReason: err,
+		}
 	}
 }
 
@@ -477,6 +509,13 @@ func (s *Server) stopSiloInternal(name string) error {
 	if silo == nil {
 		return fmt.Errorf("no silo %q", name)
 	}
+
+	// we tell the metadata service first so it has a chance to stop listeners on the bridge interface
+	s.metadataService.HostEvent(&metadataEvent{
+		event: eventSiloStopped,
+		ID:    silo.IDHex,
+		Name:  name,
+	})
 
 	if err := silo.Close(); err != nil {
 		return err
