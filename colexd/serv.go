@@ -446,6 +446,10 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 	builder.HostMap = req.SiloConf.Network.Hosts
 	builder.Env = append(builder.Env, fmt.Sprintf("METADATA_ENDPOINT=%s:%d", network.BridgeIP, metadataPort))
 
+	if len(builder.Nameservers) == 0 {
+		builder.Nameservers = []string{network.BridgeIP.String(), "8.8.8.8"}
+	}
+
 	if err = builder.Finalize(); err != nil {
 		s.ipPool.FreeAssignment(network.Slice)
 		return err

@@ -31,6 +31,8 @@ type config struct {
 		BlindEnrollmentWindow int    `hcl:"blind_enrollment_seconds"`
 		CertsFile             string `hcl:"certs_file"`
 	}
+
+	Hostnames map[string]string `hcl:"hostnames"`
 }
 
 // valid Authentication modes
