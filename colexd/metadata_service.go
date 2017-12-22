@@ -39,6 +39,10 @@ type metadataSiloInfo struct {
 	Interfaces []wire.Interface
 	BridgeIP   string
 
+	listeners []*listenerService
+}
+
+type listenerService struct {
 	listenerShutdown bool
 	shouldShutdown   chan bool
 }
@@ -101,10 +105,12 @@ func (s *metadataService) HostEvent(e *metadataEvent) {
 		}
 
 	case eventSiloStopped:
-		if silo, ok := s.silosByID[e.ID]; ok && silo.shouldShutdown != nil {
-			silo.shouldShutdown <- true
-			for !silo.listenerShutdown {
-				runtime.Gosched()
+		if silo, ok := s.silosByID[e.ID]; ok {
+			for _, l := range silo.listeners {
+				l.shouldShutdown <- true
+				for !l.listenerShutdown {
+					runtime.Gosched()
+				}
 			}
 		}
 
@@ -133,24 +139,31 @@ func (s *metadataService) setupListener(silo *metadataSiloInfo) error {
 	serv := http.Server{
 		Handler: s,
 	}
-	silo.shouldShutdown = make(chan bool)
+	metadataServerListener := &listenerService{
+		shouldShutdown: make(chan bool),
+	}
 	go serv.Serve(listener)
-	go func() {
-		s.wg.Add(1)
-		defer s.wg.Done()
-		defer func() {
-			silo.listenerShutdown = true
-		}()
+	go metadataServerListener.waitForCloseSignal(&s.wg, listener, s.closing)
 
-		select {
-		case <-s.closing:
-			listener.Close()
-		case <-silo.shouldShutdown:
-			listener.Close()
-		}
+	silo.listeners = []*listenerService{
+		metadataServerListener,
+	}
+	return nil
+}
+
+func (l *listenerService) waitForCloseSignal(wg *sync.WaitGroup, listener *net.TCPListener, globalShutdown chan bool) {
+	wg.Add(1)
+	defer wg.Done()
+	defer func() {
+		l.listenerShutdown = true
 	}()
 
-	return nil
+	select {
+	case <-globalShutdown:
+		listener.Close()
+	case <-l.shouldShutdown:
+		listener.Close()
+	}
 }
 
 // ServeHTTP is called when a request is made to the metadata service.
@@ -173,6 +186,26 @@ func (s *metadataService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			log.Printf("Metadata encode error for %q: %v", siloID, err)
 		}
 	}
+	if req.URL.Path == "/list" {
+		out := map[string]interface{}{}
+		for name, silo := range s.silosByName {
+			switch req.URL.Query().Get("with") {
+			case "run-seconds":
+				out[name] = time.Now().Sub(silo.Started).Seconds()
+			case "tags":
+				out[name] = silo.Tags
+			case "bridge-address":
+				out[name] = silo.BridgeIP
+			case "routeable-address":
+				out[name] = findRouteableAddress(silo.Interfaces)
+			default:
+				out[name] = silo.ID
+			}
+		}
+		if err := writeObject(w, req, out); err != nil {
+			log.Printf("Metadata encode error for %q: %v", siloID, err)
+		}
+	}
 }
 
 func writeObject(w http.ResponseWriter, req *http.Request, obj interface{}) error {
@@ -188,7 +221,7 @@ func (s *metadataService) findSiloIDForIP(addr string) string {
 
 	for id, silo := range s.silosByID {
 		for _, intf := range silo.Interfaces {
-			if intf.Address == addr {
+			if intf.Address == addr && intf.Kind == "silo-veth" {
 				return id
 			}
 		}
@@ -199,6 +232,15 @@ func (s *metadataService) findSiloIDForIP(addr string) string {
 func findBridgeAddress(intfs []wire.Interface) string {
 	for _, intf := range intfs {
 		if intf.Kind == "bridge" {
+			return intf.Address
+		}
+	}
+	return ""
+}
+
+func findRouteableAddress(intfs []wire.Interface) string {
+	for _, intf := range intfs {
+		if intf.Kind == "silo-veth" {
 			return intf.Address
 		}
 	}
