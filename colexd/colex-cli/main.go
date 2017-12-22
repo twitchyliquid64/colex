@@ -16,6 +16,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/twitchyliquid64/colex/colexd/cert"
@@ -28,26 +29,43 @@ var (
 )
 
 type command struct {
-	minArgs int
-	handler func(args []string) error
+	minArgs   int
+	handler   func(args []string) error
+	shortHelp string
 }
 
 var commands = map[string]command{
 	"list": command{
-		handler: listCommand,
+		handler:   listCommand,
+		shortHelp: "Lists all silos running on the host.",
 	},
 	"down": command{
-		minArgs: 2,
-		handler: downCommand,
+		minArgs:   2,
+		handler:   downCommand,
+		shortHelp: "Shuts down all silos with the given names in the referenced silo configuration file.",
 	},
 	"up": command{
-		minArgs: 2,
-		handler: upCommand,
+		minArgs:   2,
+		handler:   upCommand,
+		shortHelp: "Starts all silos with the given names in the referenced silo configuration file, replacing existing silos with the same names.",
 	},
 	"enroll": command{
-		minArgs: 1,
-		handler: enrollCommand,
+		minArgs:   1,
+		handler:   enrollCommand,
+		shortHelp: "Bind your user certificate with the server using the given enrollment key, identifying you as a valid user.",
 	},
+	"enable-enroll": command{
+		minArgs:   1,
+		handler:   enableEnrollCommand,
+		shortHelp: "Temporarily enable enrollment and recieve the enrollment key, allowing other users to enroll in your presence.",
+	},
+}
+
+// avoid initialization loop :O
+func init() {
+	commands["help"] = command{
+		handler: helpCommand,
+	}
 }
 
 func prompt(msg string) string {
@@ -132,6 +150,48 @@ func client() (*http.Client, error) {
 	return client, nil
 }
 
+func helpCommand(args []string) error {
+	fmt.Printf("USAGE: %s --serv <host>:<port> [<flags>...] [<command arguments>...] <command>\n\n", os.Args[0])
+	fmt.Println("Commands:")
+	for name, command := range commands {
+		fmt.Printf("%s\n", name)
+		if command.shortHelp != "" {
+			fmt.Printf("%s\n\n", command.shortHelp)
+		}
+	}
+	fmt.Println("Examples:")
+	fmt.Println("colex-cli --serv localhost:8080 test-service.hcl up")
+	fmt.Println("colex-cli --serv localhost:8080 test-service.hcl down")
+	fmt.Println("colex-cli --serv localhost:8080 list")
+	return nil
+}
+
+func enableEnrollCommand(args []string) error {
+	client, err := client()
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse("https://" + *serv + "/enable-enroll")
+
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return fmt.Errorf("enable-enroll failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		d, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("enable-enroll RPC failed: status=%q, error=%q", resp.Status, string(d))
+	}
+
+	var responsePkt wire.EnableEnrollResponse
+	if err := gob.NewDecoder(resp.Body).Decode(&responsePkt); err != nil {
+		return fmt.Errorf("response decode failed: %v", err)
+	}
+
+	fmt.Printf("Enrollment enabled till %s.\n", responsePkt.DisablesAt.Local().Format(time.Stamp))
+	fmt.Printf("Enrollment key: %s\n", responsePkt.Code)
+	return nil
+}
+
 func enrollCommand(args []string) error {
 	key := prompt("Enrollment key: ")
 	name := prompt("Name: ")
@@ -141,7 +201,6 @@ func enrollCommand(args []string) error {
 		return err
 	}
 	u, _ := url.Parse("https://" + *serv + "/enroll?key=" + key + "&name=" + name)
-	fmt.Println(u)
 
 	resp, err := client.Get(u.String())
 	if err != nil {

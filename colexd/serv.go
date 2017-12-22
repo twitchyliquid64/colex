@@ -70,7 +70,7 @@ func NewServer(c *config) (*Server, error) {
 			return nil, err
 		}
 		s.blindEnrollmentKey = base64.URLEncoding.EncodeToString(b)
-		log.Printf("enroll enabled for %d seconds, using key %q.", c.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
+		log.Printf("Enroll enabled for %d seconds, using key %q.", c.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
 	}
 
 	if err := networkSetup(); err != nil {
@@ -175,6 +175,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	switch req.URL.Path {
+	case "/enable-enroll":
+		s.enableEnrollHandler(user, w, req)
 	case "/enroll":
 		s.blindEnrollHandler(w, req)
 	case "/up":
@@ -185,6 +187,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.listSilosHandler(w, req)
 	default:
 		httpErr(w, http.StatusNotFound, "No such endpoint")
+	}
+}
+
+func (s *Server) enableEnrollHandler(u *authorizedUser, w http.ResponseWriter, req *http.Request) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.blindEnrollmentDeadline = time.Now().Add(time.Duration(s.config.Authentication.BlindEnrollmentWindow) * time.Second)
+	b, err := util.RandBytes(8)
+	if err != nil {
+		httpErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.blindEnrollmentKey = base64.URLEncoding.EncodeToString(b)
+	log.Printf("Enroll enabled by %s (%s).", u.Name, u.Role)
+	log.Printf("Enroll enabled for %d seconds, using key %q.", s.config.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
+
+	if err := gob.NewEncoder(w).Encode(wire.EnableEnrollResponse{
+		DisablesAt: s.blindEnrollmentDeadline,
+		Code:       s.blindEnrollmentKey,
+	}); err != nil {
+		log.Printf("enable-enroll RPC encode err: %v", err)
 	}
 }
 
@@ -355,7 +379,6 @@ func (s *Server) resolveBase(base string, builder *controller.Options) error {
 }
 
 // resolveFiles sets up the builder to place files in the silo's filesystem on initialization.
-// TODO: support tarball.
 func (s *Server) resolveFiles(files []wire.File, builder *controller.Options) error {
 	for _, file := range files {
 		switch file.Type {
