@@ -1,6 +1,7 @@
 package colex
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -17,24 +18,24 @@ func SetRootFS(newroot string) error {
 	putold := filepath.Join(newroot, "/.temp_old")
 
 	if err := syscall.Mount(newroot, newroot, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-		return err
+		return fmt.Errorf("mount failed: %v", err)
 	}
 
 	if err := os.MkdirAll(putold, 0700); err != nil {
-		return err
+		return fmt.Errorf("mkdir failed: %v", err)
 	}
 	if err := syscall.PivotRoot(newroot, putold); err != nil {
-		return err
+		return fmt.Errorf("pivot root failed: %v", err)
 	}
 	if err := os.Chdir("/"); err != nil {
-		return err
+		return fmt.Errorf("chdir failed: %v", err)
 	}
 
 	if err := syscall.Unmount("/.temp_old", syscall.MNT_DETACH); err != nil {
-		return err
+		return fmt.Errorf("unmount failed: %v", err)
 	}
 	if err := os.RemoveAll(putold); err != nil {
-		return err
+		return fmt.Errorf("removeall failed: %v", err)
 	}
 
 	return nil
