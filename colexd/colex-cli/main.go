@@ -59,6 +59,11 @@ var commands = map[string]command{
 		handler:   enableEnrollCommand,
 		shortHelp: "Temporarily enable enrollment and recieve the enrollment key, allowing other users to enroll in your presence.",
 	},
+	"set-host": command{
+		minArgs:   2,
+		handler:   setHostCommand,
+		shortHelp: "Sets the IP to resolve for a given hostname within silos.",
+	},
 }
 
 // avoid initialization loop :O
@@ -209,6 +214,31 @@ func enrollCommand(args []string) error {
 	if resp.StatusCode != 200 {
 		d, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("enroll RPC failed: status=%q, error=%q", resp.Status, string(d))
+	}
+
+	return nil
+}
+
+func setHostCommand(args []string) error {
+	pkt := wire.SetHostRequest{Host: args[0], IP: args[1]}
+	var buf bytes.Buffer
+	if err2 := gob.NewEncoder(&buf).Encode(pkt); err2 != nil {
+		return fmt.Errorf("encode error: %v", err2)
+	}
+
+	client, err := client()
+	if err != nil {
+		return err
+	}
+	u, _ := url.Parse("https://" + *serv + "/set-host")
+
+	resp, err := client.Post(u.String(), "application/gob", &buf)
+	if err != nil {
+		return fmt.Errorf("set-host failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		d, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("set-host RPC failed: status=%q, error=%q", resp.Status, string(d))
 	}
 
 	return nil
@@ -422,15 +452,24 @@ func main() {
 		errorOut("Expected 'serv' flag")
 	}
 
+	commandLeading := false
 	c, ok := commands[flag.Arg(flag.NArg()-1)]
 	if !ok {
-		errorOut(fmt.Sprintf("Unrecognised command %q\n", flag.Arg(flag.NArg()-1)))
+		if _, ok := commands[flag.Arg(0)]; !ok {
+			errorOut(fmt.Sprintf("Unrecognised command %q\n", flag.Arg(flag.NArg()-1)))
+		}
+		commandLeading = true
+		c = commands[flag.Arg(0)]
 	}
 	if flag.NArg() < c.minArgs {
 		errorOut(fmt.Sprintf("Expected %d arguments, got %d\n", c.minArgs, flag.NArg()))
 	}
 
-	if err := c.handler(flag.Args()); err != nil {
+	args := flag.Args()
+	if commandLeading {
+		args = args[1:]
+	}
+	if err := c.handler(args); err != nil {
 		errorOut(err.Error())
 	}
 }

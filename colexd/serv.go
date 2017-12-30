@@ -206,6 +206,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.siloDownHandler(w, req)
 	case "/list":
 		s.listSilosHandler(w, req)
+	case "/set-host":
+		s.setHostHandler(w, req)
 	default:
 		httpErr(w, http.StatusNotFound, "No such endpoint")
 	}
@@ -526,6 +528,20 @@ func (s *Server) stopSiloInternal(name string) error {
 
 	delete(s.silos, name)
 	return nil
+}
+
+func (s *Server) setHostHandler(w http.ResponseWriter, req *http.Request) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	var pkt wire.SetHostRequest
+	if err := gob.NewDecoder(req.Body).Decode(&pkt); err != nil {
+		log.Printf("SetHostRequest.Decode() err: %v", err)
+		httpErr(w, http.StatusBadRequest, "Decode error")
+		return
+	}
+
+	s.config.Hostnames[pkt.Host] = pkt.IP
 }
 
 func networkSetup() error {
