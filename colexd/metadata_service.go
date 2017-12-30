@@ -16,7 +16,10 @@ import (
 	"github.com/twitchyliquid64/colex/colexd/wire"
 )
 
-const metadataPort = 17832
+const (
+	metadataPort = 17832
+	timeoutUDPIO = time.Second
+)
 
 type metadataEventType int
 
@@ -171,7 +174,7 @@ func (s *metadataService) setupUDPDNS(silo *metadataSiloInfo) error {
 		return err
 	}
 
-	server := &dns.Server{PacketConn: listener, Handler: s}
+	server := &dns.Server{PacketConn: listener, Handler: s, ReadTimeout: timeoutUDPIO, WriteTimeout: timeoutUDPIO}
 	UDPDNSListener := &listenerService{
 		shouldShutdown: make(chan bool),
 	}

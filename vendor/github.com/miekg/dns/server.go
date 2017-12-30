@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -509,6 +510,9 @@ func (srv *Server) serveUDP(l *net.UDPConn) error {
 		}
 		srv.lock.RUnlock()
 		if err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				return err
+			}
 			continue
 		}
 		go srv.serve(s.RemoteAddr(), handler, m, l, s, nil)
