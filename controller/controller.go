@@ -199,23 +199,26 @@ func (s *Silo) Init() error {
 		return err
 	}
 
-	// generate user/group mappings
-	userMap, err := s.userMaps()
-	if err != nil {
-		s.State = StateInternalError
-		return err
-	}
-	groupMap, err := s.groupMaps()
-	if err != nil {
-		s.State = StateInternalError
-		return err
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: colex.NamespaceDomains | colex.NamespaceIPC |
+			colex.NamespaceProcess | colex.NamespaceFS | colex.NamespaceNet,
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: colex.NamespaceUser | colex.NamespaceDomains | colex.NamespaceIPC |
-			colex.NamespaceProcess | colex.NamespaceFS | colex.NamespaceNet,
-		UidMappings: userMap,
-		GidMappings: groupMap,
+	if len(s.userMappings) > 0 {
+		// generate user/group mappings
+		userMap, err := s.userMaps()
+		if err != nil {
+			s.State = StateInternalError
+			return err
+		}
+		groupMap, err := s.groupMaps()
+		if err != nil {
+			s.State = StateInternalError
+			return err
+		}
+		cmd.SysProcAttr.UidMappings = userMap
+		cmd.SysProcAttr.GidMappings = groupMap
+		cmd.SysProcAttr.Cloneflags = cmd.SysProcAttr.Cloneflags | colex.NamespaceUser
 	}
 
 	s.child = cmd

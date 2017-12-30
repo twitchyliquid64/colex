@@ -20,6 +20,8 @@ type config struct {
 	Images  []Image `hcl:"image"`
 	SiloDir string  `hcl:"silo_dir"`
 
+	DisableUserNamespaces bool `hcl:"disable_user_namespaces"`
+
 	TransportSecurity struct {
 		KeySource string `hcl:"key_source"`
 

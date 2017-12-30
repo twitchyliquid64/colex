@@ -20,7 +20,8 @@ type Options struct {
 	MakeFromFolder string
 
 	// user / account / permissions
-	accountMappers []accountMappers
+	accountMappers       []accountMappers
+	DisableAcctNamespace bool
 
 	// network
 	Hostname    string
@@ -38,7 +39,7 @@ type Options struct {
 // method should be called before the Options are used but after the options
 // have been populated.
 func (o *Options) Finalize() error {
-	if len(o.accountMappers) == 0 {
+	if len(o.accountMappers) == 0 && !o.DisableAcctNamespace {
 		o.accountMappers = append(o.accountMappers, ParentToRootMapping())
 	}
 	o.Env = append(o.Env, "PS1=\\u@\\h:\\w> ", "CLASS="+o.Class)
