@@ -13,6 +13,7 @@ type Options struct {
 	// metadata
 	Class string
 	Tags  []string
+	Grant map[string]bool
 
 	// filesystem
 	Bases          []base

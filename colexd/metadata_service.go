@@ -14,6 +14,7 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/twitchyliquid64/colex/colexd/wire"
+	"github.com/twitchyliquid64/colex/controller"
 )
 
 const (
@@ -35,6 +36,7 @@ type metadataEvent struct {
 	// populated for eventSiloStarted
 	tags       []string
 	interfaces []wire.Interface
+	silo       *controller.Silo
 }
 
 type metadataSiloInfo struct {
@@ -43,6 +45,8 @@ type metadataSiloInfo struct {
 	Started    time.Time
 	Interfaces []wire.Interface
 	BridgeIP   string
+
+	silo *controller.Silo
 
 	listeners []*listenerService
 }
@@ -103,6 +107,7 @@ func (s *metadataService) HostEvent(e *metadataEvent) {
 			Started:    time.Now(),
 			Interfaces: e.interfaces,
 			BridgeIP:   findBridgeAddress(e.interfaces),
+			silo:       e.silo,
 		}
 		s.silosByName[e.Name] = &siloInfo
 		s.silosByID[e.ID] = &siloInfo
@@ -279,25 +284,73 @@ func (s *metadataService) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			log.Printf("Metadata encode error for %q: %v", siloID, err)
 		}
 	}
-	if req.URL.Path == "/list" {
-		out := map[string]interface{}{}
-		for name, silo := range s.silosByName {
-			switch req.URL.Query().Get("with") {
-			case "run-seconds":
-				out[name] = time.Now().Sub(silo.Started).Seconds()
-			case "tags":
-				out[name] = silo.Tags
-			case "bridge-address":
-				out[name] = silo.BridgeIP
-			case "routeable-address":
-				out[name] = findRouteableAddress(silo.Interfaces)
-			default:
-				out[name] = silo.ID
-			}
+	if req.URL.Path == "/stats" {
+		mem, err := s.silosByID[siloID].silo.MemStats()
+		if err != nil {
+			log.Printf("%q.MemStats() err = %v", siloID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
-		if err := writeObject(w, req, out); err != nil {
+		if err := writeObject(w, req, wire.SiloStat{
+			Mem: *mem,
+		}); err != nil {
 			log.Printf("Metadata encode error for %q: %v", siloID, err)
 		}
+	}
+	if req.URL.Path == "/list" {
+		s.metadataListHandler(siloID, w, req)
+	}
+	if strings.HasPrefix(req.URL.Path, "/silo/") {
+		if !s.silosByID[siloID].silo.Grant["query_silos"] {
+			http.Error(w, "'query_silos' grant required", http.StatusForbidden)
+			return
+		}
+		s.metadataSiloQueryHandler(siloID, w, req)
+	}
+}
+
+func (s *metadataService) metadataListHandler(siloID string, w http.ResponseWriter, req *http.Request) {
+	out := map[string]interface{}{}
+	for name, silo := range s.silosByName {
+		switch req.URL.Query().Get("with") {
+		case "run-seconds":
+			out[name] = time.Now().Sub(silo.Started).Seconds()
+		case "tags":
+			out[name] = silo.Tags
+		case "bridge-address":
+			out[name] = silo.BridgeIP
+		case "routeable-address":
+			out[name] = findRouteableAddress(silo.Interfaces)
+		default:
+			out[name] = silo.ID
+		}
+	}
+	if err := writeObject(w, req, out); err != nil {
+		log.Printf("Metadata encode error for %q: %v", siloID, err)
+	}
+}
+
+func (s *metadataService) metadataSiloQueryHandler(siloID string, w http.ResponseWriter, req *http.Request) {
+	referencedID := req.URL.Path[len("/silo/") : len("/silo/")+strings.Index(req.URL.Path[len("/silo/"):], "/")]
+	fmt.Println(referencedID, req.URL.Path)
+	referencedSilo, ok := s.silosByID[referencedID]
+	if !ok {
+		http.Error(w, "No silo with that ID", http.StatusNotFound)
+		return
+	}
+
+	var out interface{}
+	switch req.URL.Path[len("/silo/")+len(referencedID)+1:] {
+	default:
+		http.Error(w, "Unknown detail "+req.URL.Path[len("/silo/")+len(referencedID)+1:], http.StatusBadRequest)
+		return
+	case "meta":
+		out = referencedSilo
+	case "netstats":
+		out = describeInterfaces(referencedSilo.silo, true)
+	}
+	if err := writeObject(w, req, out); err != nil {
+		log.Printf("Metadata encode error for %q: %v", referencedID, err)
 	}
 }
 

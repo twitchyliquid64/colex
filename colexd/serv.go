@@ -473,6 +473,7 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 		Env:                  req.SiloConf.Binary.Env,
 		MakeFromFolder:       s.config.SiloDir,
 		DisableAcctNamespace: s.config.DisableUserNamespaces,
+		Grant:                req.SiloConf.Grant,
 	}
 
 	if err := s.resolveBase(req.SiloConf.Base, &builder); err != nil {
@@ -538,6 +539,7 @@ func buildSiloStartedMetadataEvent(silo *controller.Silo) *metadataEvent {
 		Name:       silo.Name,
 		tags:       silo.Tags,
 		interfaces: describeInterfaces(silo, false),
+		silo:       silo,
 	}
 }
 

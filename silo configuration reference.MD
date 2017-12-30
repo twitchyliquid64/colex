@@ -56,7 +56,7 @@ Silo "s" {
 | *binary*                  | This block specifies the binary to be invoked in the silo, along with it's arguments and environment variables.              |
 | *file* blocks             | Each *file* block specifies a single file which should be copied into the silo.                                              |
 | *files* blocks            | Each *files* block specifies a folder containing files/folders which should be copied into the silo.                         |
-| *bind* blocks             | Each *bind* block specifies the matching bind resource (specified in *colexd*'s configuration) should be mounted at `path`.  |
+| *grants*                  | This block specifies additional runtime permissions.                                                                         |
 
 
 **Network schema:**
@@ -91,3 +91,15 @@ The following environment variables are added by default and cannot be disabled 
  * `METADATA_ENDPOINT` - Specifies the host:port combination the metadata server can be reached on.
  * `CLASS` - Exposes the class specified in the silo config.
  * `PS1` - Set to `\u@\h:\w> `.
+
+## Additional permissions
+
+By default, what silo's can do at runtime is restricted. Silos can get additional permissions by requesting them using the `grants` block.
+
+The following example gives the silo permission to read all silo's metadata and statistics using the `/silo/{SID}/(meta|netstats)`:
+
+```hcl
+grants = {
+  query_silos = true
+}
+```

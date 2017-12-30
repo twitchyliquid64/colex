@@ -415,7 +415,6 @@ func sumInterfaceStatistics(in []wire.Interface) netlink.LinkStatistics64 {
 		out.RxDropped += intf.Stats.RxDropped
 		out.TxDropped += intf.Stats.TxDropped
 	}
-	fmt.Println(out)
 	return out
 }
 

@@ -21,6 +21,8 @@ type Silo struct {
 
 	Binary Binary
 
+	Grant map[string]bool `hcl:"grants"`
+
 	Files     map[string]File `hcl:"file"`
 	FileBalls map[string]File `hcl:"files"`
 	Binds     map[string]Bind `hcl:"bind"`

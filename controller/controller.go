@@ -57,6 +57,7 @@ type Silo struct {
 	Class string
 	Tags  []string
 	Name  string
+	Grant map[string]bool
 
 	// invocation options
 	Cmd  string
@@ -92,6 +93,7 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 		Name:  name,
 		Class: opts.Class,
 		Tags:  make([]string, len(opts.Tags)),
+		Grant: map[string]bool{},
 
 		Cmd:  opts.Cmd,
 		Root: opts.Root,
@@ -130,6 +132,9 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 	copy(s.Nameservers, opts.Nameservers)
 	for hostname, address := range opts.HostMap {
 		s.HostMap[hostname] = address
+	}
+	for grant, v := range opts.Grant {
+		s.Grant[grant] = v
 	}
 
 	if s.Hostname == "" {
