@@ -80,5 +80,5 @@ Silo "s" {
 The following environment variables are added by default and cannot be disabled (file a FR if you actually need to).
 
  * `METADATA_ENDPOINT` - Specifies the host:port combination the metadata server can be reached on.
- * `CLASS` - Set the the class set in the silo config.
+ * `CLASS` - Exposes the class specified in the silo config.
  * `PS1` - Set to `\u@\h:\w> `.

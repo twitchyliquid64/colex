@@ -57,3 +57,8 @@ hostnames = {
 | *hostnames*               | Specify IPv4 addresses which will resolve for the given domain within silos.                                                 |
 | *silo_dir*                | Specify the directory within which the filesystems of the silos will be created.                                             |
 | *disable_user_namespaces* | Disables use of user namespaces (clone flag `CLONE_NEWUSER`). This may have unintended side-effects, so advanced users only. |
+
+## Additional points for the raspberry pi
+
+1. Make sure the kernel is up to date with `rpi-update` (possibly update packages as well).
+2. Make sure your upstream router has a static route, forwarding the subnet you specified in `address_pool` to the IP of your Pi.

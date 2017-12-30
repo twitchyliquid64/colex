@@ -14,6 +14,7 @@ cd server
 export GOPATH=`pwd`
 go get github.com/twitchyliquid64/colex
 go build github.com/twitchyliquid64/colex/colexd
+cp github.com/twitchyliquid64/colex/busybox.tar ./ # Use busybox-arm.tar if running on ARM (eg: raspberry pi).
 sudo ./colexd --addr localhost:8080 --ip-pool 10.21.0.1/24 # colexd must run as root for now, cuz containers + cbf
 ```
 
