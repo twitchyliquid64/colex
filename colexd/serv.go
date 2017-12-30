@@ -422,11 +422,12 @@ func (s *Server) resolveFiles(files []wire.File, builder *controller.Options) er
 // s.lock.
 func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 	builder := controller.Options{
-		Class: req.SiloConf.Class,
-		Tags:  req.SiloConf.Tags,
-		Cmd:   req.SiloConf.Binary.Path,
-		Args:  req.SiloConf.Binary.Args,
-		Env:   req.SiloConf.Binary.Env,
+		Class:          req.SiloConf.Class,
+		Tags:           req.SiloConf.Tags,
+		Cmd:            req.SiloConf.Binary.Path,
+		Args:           req.SiloConf.Binary.Args,
+		Env:            req.SiloConf.Binary.Env,
+		MakeFromFolder: s.config.SiloDir,
 	}
 
 	if err := s.resolveBase(req.SiloConf.Base, &builder); err != nil {

@@ -17,7 +17,8 @@ type config struct {
 	Listener    string `hcl:"listener"`
 	AddressPool string `hcl:"address_pool"`
 
-	Images []Image `hcl:"image"`
+	Images  []Image `hcl:"image"`
+	SiloDir string  `hcl:"silo_dir"`
 
 	TransportSecurity struct {
 		KeySource string `hcl:"key_source"`

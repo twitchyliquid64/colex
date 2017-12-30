@@ -15,8 +15,9 @@ type Options struct {
 	Tags  []string
 
 	// filesystem
-	Bases []base
-	Root  string
+	Bases          []base
+	Root           string
+	MakeFromFolder string
 
 	// user / account / permissions
 	accountMappers []accountMappers

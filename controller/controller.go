@@ -105,6 +105,17 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 		bases:        make([]base, len(opts.Bases)),
 	}
 
+	// if MakeFromFolder set, we build a root folder from the folder given.
+	if opts.MakeFromFolder != "" && opts.Root != "" {
+		return nil, errors.New("cannot set both Root and MakeFromFolder")
+	} else if opts.MakeFromFolder != "" {
+		s.Root = path.Join(opts.MakeFromFolder, "s"+s.IDHex)
+		if os.Mkdir(s.Root, 0750); err != nil {
+			return nil, err
+		}
+		s.shouldDeleteRoot = true
+	}
+
 	for i := range id {
 		s.ID[i] = id[i]
 	}
@@ -136,7 +147,9 @@ func (s *Silo) Init() error {
 		return ErrAlreadyRunning
 	}
 
-	// create a temporary dir for the rootFS if none exists
+	// create a temporary dir for the rootFS if none exists.
+	// if opts.MakeFromFolder was set, this has already been done from the
+	// directory given.
 	if s.Root == "" {
 		s.Root, err = ioutil.TempDir("", "s"+s.IDHex)
 		if err != nil {
