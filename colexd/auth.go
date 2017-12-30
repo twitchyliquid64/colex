@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,13 +15,22 @@ import (
 	"time"
 )
 
+const roleRoot = "root"
+
 var errNotAuthorized = errors.New("not authorized")
 
 type authorizedUser struct {
 	Name           string
 	CreatedAtEpoch int
-	Role           string
+	RoleEncoded    string
 	PubkeyRaw      string
+}
+
+func (u *authorizedUser) GetRole() roleData {
+	d, _ := base64.StdEncoding.DecodeString(u.RoleEncoded)
+	rd := roleData{Role: "UNKNOWN"}
+	json.Unmarshal(d, &rd)
+	return rd
 }
 
 func parseCertAuthorizedLine(line string) (*authorizedUser, error) {
@@ -35,9 +45,13 @@ func parseCertAuthorizedLine(line string) (*authorizedUser, error) {
 	return &authorizedUser{
 		Name:           spl[0],
 		CreatedAtEpoch: epoch,
-		Role:           spl[1],
+		RoleEncoded:    spl[1],
 		PubkeyRaw:      spl[3],
 	}, nil
+}
+
+type roleData struct {
+	Role string
 }
 
 func enrollCertificate(name, role string, c *config, conn *tls.ConnectionState) error {
@@ -60,7 +74,12 @@ func enrollCertificate(name, role string, c *config, conn *tls.ConnectionState) 
 		return err
 	}
 
-	if _, err := f.WriteString(fmt.Sprintf("\n%s %s %d %s", name, role, time.Now().Unix(), pkeyb64)); err != nil {
+	roleEncoded, err := json.Marshal(roleData{Role: role})
+	if err != nil {
+		return err
+	}
+
+	if _, err := f.WriteString(fmt.Sprintf("\n%s %s %d %s", name, base64.StdEncoding.EncodeToString(roleEncoded), time.Now().Unix(), pkeyb64)); err != nil {
 		f.Close()
 		return err
 	}

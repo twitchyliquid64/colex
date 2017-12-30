@@ -226,7 +226,7 @@ func (s *Server) enableEnrollHandler(u *authorizedUser, w http.ResponseWriter, r
 		return
 	}
 	s.blindEnrollmentKey = base64.URLEncoding.EncodeToString(b)
-	log.Printf("Enroll enabled by %s (%s).", u.Name, u.Role)
+	log.Printf("Enroll enabled by %s (%s).", u.Name, u.GetRole().Role)
 	log.Printf("Enroll enabled for %d seconds, using key %q.", s.config.Authentication.BlindEnrollmentWindow, s.blindEnrollmentKey)
 
 	if err := gob.NewEncoder(w).Encode(wire.EnableEnrollResponse{
@@ -247,7 +247,7 @@ func (s *Server) blindEnrollHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	log.Printf("Now enrolling %q", req.URL.Query().Get("name"))
-	if err := enrollCertificate(req.URL.Query().Get("name"), "default", s.config, req.TLS); err != nil {
+	if err := enrollCertificate(req.URL.Query().Get("name"), roleRoot, s.config, req.TLS); err != nil {
 		httpErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
