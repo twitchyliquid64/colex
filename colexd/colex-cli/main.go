@@ -18,10 +18,12 @@ import (
 	"strings"
 	"time"
 
+	"code.cloudfoundry.org/bytefmt"
 	"github.com/olekukonko/tablewriter"
 	"github.com/twitchyliquid64/colex/colexd/cert"
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/siloconf"
+	"github.com/vishvananda/netlink"
 )
 
 var (
@@ -279,6 +281,7 @@ func listCommand(args []string) error {
 			silo.Class,
 			strings.Join(silo.Tags, ","),
 			"",
+			"",
 		})
 
 		var addresses []string
@@ -286,13 +289,17 @@ func listCommand(args []string) error {
 			addresses = append(addresses, intf.Address)
 		}
 		tableData[len(tableData)-1][4] = strings.Join(addresses, ", ")
+		ss := sumInterfaceStatistics(silo.Interfaces)
+		tableData[len(tableData)-1][5] = fmt.Sprintf("Net: %sb Mem: %sb", bytefmt.ByteSize(ss.TxBytes+ss.RxBytes), bytefmt.ByteSize(silo.Stats.Mem.Resident))
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "ID (#)", "Class", "Tags", "Addresses"})
+	table.SetHeader([]string{"Name", "ID (#)", "Class", "Tags", "Addresses", "Stats"})
 	table.SetAutoMergeCells(true)
 	table.SetCenterSeparator("|")
+	table.SetColWidth(14)
 	table.AppendBulk(tableData)
+	fmt.Printf("\n%s: \n", responsePkt.Name)
 	table.Render()
 	return nil
 }
@@ -393,6 +400,25 @@ func upCommand(args []string) error {
 	return nil
 }
 
+func sumInterfaceStatistics(in []wire.Interface) netlink.LinkStatistics64 {
+	out := netlink.LinkStatistics64{}
+	for _, intf := range in {
+		if intf.Kind == "loopback" {
+			continue
+		}
+		out.RxPackets += intf.Stats.RxPackets
+		out.TxPackets += intf.Stats.TxPackets
+		out.RxBytes += intf.Stats.RxBytes
+		out.TxBytes += intf.Stats.TxBytes
+		out.RxErrors += intf.Stats.RxErrors
+		out.TxErrors += intf.Stats.TxErrors
+		out.RxDropped += intf.Stats.RxDropped
+		out.TxDropped += intf.Stats.TxDropped
+	}
+	fmt.Println(out)
+	return out
+}
+
 func filterSysInterfaces(in []wire.Interface) []wire.Interface {
 	var out []wire.Interface
 	for i := range in {
@@ -448,7 +474,7 @@ func main() {
 	if flag.NArg() < 1 {
 		fmt.Println("Error: expected command")
 	}
-	if *serv == "" {
+	if *serv == "" && flag.Arg(0) != "help" {
 		errorOut("Expected 'serv' flag")
 	}
 

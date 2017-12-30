@@ -13,7 +13,7 @@ import (
 )
 
 type config struct {
-	Name        string `hcl:"host_name"`
+	Name        string `hcl:"name"`
 	Listener    string `hcl:"listener"`
 	AddressPool string `hcl:"address_pool"`
 

@@ -17,6 +17,7 @@ import (
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/controller"
 	"github.com/twitchyliquid64/colex/util"
+	"github.com/vishvananda/netlink"
 )
 
 // Server represents the running state of colexd.
@@ -269,16 +270,26 @@ func (s *Server) listSilosHandler(w http.ResponseWriter, req *http.Request) {
 
 	var silos []wire.Silo
 	for name, silo := range s.silos {
-		silos = append(silos, wire.Silo{
+		mem, err := silo.MemStats()
+		if err != nil {
+			log.Printf("MemStats() err: %v", err)
+			httpErr(w, http.StatusBadRequest, "Statistics error")
+			return
+		}
+		si := wire.Silo{
 			Name:       name,
 			Class:      silo.Class,
 			Tags:       silo.Tags,
 			IDHex:      silo.IDHex,
-			Interfaces: describeInterfaces(silo),
-		})
+			Interfaces: describeInterfaces(silo, true),
+			Stats: wire.SiloStat{
+				Mem: *mem,
+			},
+		}
+		silos = append(silos, si)
 	}
 
-	responsePkt := wire.ListPacket{Matches: silos}
+	responsePkt := wire.ListPacket{Matches: silos, Name: s.config.Name}
 	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
 		log.Printf("list RPC encode err: %v", err)
 	}
@@ -361,20 +372,28 @@ func (s *Server) siloUpHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	silo := s.silos[upPkt.SiloConf.Name]
-	responsePkt := wire.UpPacketResponse{IDHex: silo.IDHex, Interfaces: describeInterfaces(silo)}
+	responsePkt := wire.UpPacketResponse{IDHex: silo.IDHex, Interfaces: describeInterfaces(silo, false)}
 	if err := gob.NewEncoder(w).Encode(responsePkt); err != nil {
 		log.Printf("up RPC encode(%q) err: %v", upPkt.SiloConf.Name, err)
 	}
 }
 
-func describeInterfaces(silo *controller.Silo) []wire.Interface {
+func describeInterfaces(silo *controller.Silo, includeStats bool) []wire.Interface {
 	var out []wire.Interface
 	for _, i := range silo.Interfaces {
 		for _, d := range i.Info() {
+			var stats netlink.LinkStatistics
+			if includeStats {
+				l, err := netlink.LinkByName(d.Name)
+				if err == nil {
+					stats = *l.Attrs().Statistics
+				}
+			}
 			out = append(out, wire.Interface{
 				Address: d.Address,
 				Name:    d.Name,
 				Kind:    d.Kind,
+				Stats:   netlink.LinkStatistics64(stats),
 			})
 		}
 	}
@@ -492,7 +511,7 @@ func buildSiloStartedMetadataEvent(silo *controller.Silo) *metadataEvent {
 		ID:         silo.IDHex,
 		Name:       silo.Name,
 		tags:       silo.Tags,
-		interfaces: describeInterfaces(silo),
+		interfaces: describeInterfaces(silo, false),
 	}
 }
 

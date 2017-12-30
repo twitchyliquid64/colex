@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/pkg/reexec"
+	gosigar "github.com/jondot/gosigar"
 	"github.com/twitchyliquid64/colex"
 	"github.com/twitchyliquid64/colex/util"
 )
@@ -293,6 +294,33 @@ func (s *Silo) Wait() error {
 		return ErrNotRunning
 	}
 	return s.child.Wait()
+}
+
+// MemStats returns memory statistics about the running silo.
+// Assumes the lock is held.
+func (s *Silo) MemStats() (*gosigar.ProcMem, error) {
+	var out gosigar.ProcMem
+	if s.State != StateRunning {
+		return nil, ErrNotRunning
+	}
+
+	pids, err := util.FindProcessesInNamespace(s.child.Process.Pid)
+	if err != nil {
+		return nil, err
+	}
+	for _, pid := range pids {
+		var stat gosigar.ProcMem
+		if err := stat.Get(pid); err != nil {
+			return nil, err
+		}
+		out.Size += stat.Size
+		out.Share += stat.Share
+		out.Resident += stat.Resident
+		out.PageFaults += stat.PageFaults
+		out.MinorFaults += stat.MinorFaults
+		out.MajorFaults += stat.MajorFaults
+	}
+	return &out, nil
 }
 
 func (s *Silo) userMaps() ([]syscall.SysProcIDMap, error) {
