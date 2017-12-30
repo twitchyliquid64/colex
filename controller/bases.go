@@ -130,3 +130,27 @@ func (f *FileLoaderTarballBase) Setup(c *exec.Cmd, s *Silo) error {
 func (f *FileLoaderTarballBase) Teardown(*Silo) error {
 	return nil
 }
+
+// BindBase binds in a path from the system.
+type BindBase struct {
+	SysPath, SiloPath string
+	IsFile            bool
+}
+
+// Setup implements base.
+func (b *BindBase) Setup(c *exec.Cmd, s *Silo) error {
+	s.binds = append(s.binds, bindMntInfo{
+		SiloPath: b.SiloPath,
+		SysPath:  b.SysPath,
+		IsFile:   b.IsFile,
+	})
+	return nil
+}
+
+// Teardown implements base.
+func (b *BindBase) Teardown(s *Silo) error {
+	// if err := syscall.Unmount(filepath.Join(s.Root, b.SiloPath), 0); err != nil {
+	// 	return fmt.Errorf("bind unmount failed: %v", err)
+	// }
+	return nil
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/twitchyliquid64/colex/colexd/cert"
 	"github.com/twitchyliquid64/colex/colexd/wire"
 	"github.com/twitchyliquid64/colex/controller"
+	"github.com/twitchyliquid64/colex/siloconf"
 	"github.com/twitchyliquid64/colex/util"
 	"github.com/vishvananda/netlink"
 )
@@ -439,6 +440,28 @@ func (s *Server) resolveFiles(files []wire.File, builder *controller.Options) er
 	return nil
 }
 
+// resolveBinds sets up requested bindMounts in the silo's filesystem on initialization.
+func (s *Server) resolveBinds(mounts map[string]siloconf.Bind, builder *controller.Options) error {
+	for _, m := range mounts {
+		var spec *BindSpec
+		for _, s := range s.config.Binds {
+			if s.ID == m.ID {
+				spec = &s
+				break
+			}
+		}
+		if spec == nil {
+			return fmt.Errorf("no bind %q", m.ID)
+		}
+		builder.AddFS(&controller.BindBase{
+			SysPath:  spec.Path,
+			SiloPath: m.Path,
+			IsFile:   spec.IsFile,
+		})
+	}
+	return nil
+}
+
 // stopSiloInternal is called to start a silo. Assumes caller holds
 // s.lock.
 func (s *Server) startSiloInternal(req *wire.UpPacket) error {
@@ -456,6 +479,9 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 		return err
 	}
 	if err := s.resolveFiles(req.Files, &builder); err != nil {
+		return err
+	}
+	if err := s.resolveBinds(req.SiloConf.Binds, &builder); err != nil {
 		return err
 	}
 

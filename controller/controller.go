@@ -72,6 +72,7 @@ type Silo struct {
 	// base environment providers
 	bases        []base           // setup filesystem
 	userMappings []accountMappers // setup user/group mappings between silo and parent
+	binds        []bindMntInfo
 
 	// state relevant for clean shutdown
 	shouldDeleteRoot bool

@@ -20,6 +20,8 @@ type config struct {
 	Images  []Image `hcl:"image"`
 	SiloDir string  `hcl:"silo_dir"`
 
+	Binds []BindSpec `hcl:"bind"`
+
 	DisableUserNamespaces bool `hcl:"disable_user_namespaces"`
 
 	TransportSecurity struct {
@@ -60,6 +62,13 @@ type Image struct {
 	Type string `hcl:"type"`
 	Path string `hcl:"path"`
 	Name string `hcl:"name"`
+}
+
+// BindSpec makes a file or folder available to be bound into a silo's filesystem.
+type BindSpec struct {
+	Path   string `hcl:"path"`
+	ID     string `hcl:"id"`
+	IsFile bool   `hcl:"is_file"`
 }
 
 func loadConfig(data []byte) (*config, error) {

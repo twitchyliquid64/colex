@@ -30,6 +30,15 @@ hostnames = {
   kek = "1.2.3.4"
 }
 
+bind "shared" {
+  id = "shared"
+  path = "/var/siloshared"
+}
+bind "shared file" {
+  id = "shared"
+  path = "/etc/thing/info"
+  is_file = true
+}
 ```
 
 **Explanation**
@@ -41,7 +50,7 @@ hostnames = {
  * The *transport_security* section details how the network service (which `colex-cli` connects to) is encrypted. If *key_source* is set to *embedded*, *embedded_cert* and *embedded_key* have to contain a PEM-encoded cert/private-key, with the newlines escaped to `\n`. This cert/key is then used as a TLS server certificate.
  * The *authentication* section specifies how RPCs/commands from `colex-cli` are authenticated - in other words, what criteria they need to meet before colex will accept the command. With
  *mode* set to *certs-file*, no command will be accepted from `colex-cli` unless the TLS public key used by `colex-cli` is in the file referenced by *certs_file*.
-
+ * The *bind* blocks specify a file or folder which may be shared with silos, if the silo requests it in their configuration file.
 
 ## Detailed reference
 
@@ -57,6 +66,7 @@ hostnames = {
 | *hostnames*               | Specify IPv4 addresses which will resolve for the given domain within silos.                                                 |
 | *silo_dir*                | Specify the directory within which the filesystems of the silos will be created.                                             |
 | *disable_user_namespaces* | Disables use of user namespaces (clone flag `CLONE_NEWUSER`). This may have unintended side-effects, so advanced users only. |
+| *bind*                    | Bind sections specify that the file/dir at path may be mounted within a silo.                                                |
 
 ## Additional points for the raspberry pi
 

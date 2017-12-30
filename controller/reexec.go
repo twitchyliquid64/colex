@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -20,6 +21,11 @@ const (
 	deleteInvocationDataAfterLoad = false
 )
 
+type bindMntInfo struct {
+	SysPath, SiloPath string
+	IsFile            bool
+}
+
 type invocationInfo struct {
 	ID    []byte
 	IDHex string
@@ -27,6 +33,7 @@ type invocationInfo struct {
 	Hostname string
 
 	OnStartCommands []StartupCommand
+	Binds           []bindMntInfo
 
 	Cmd  string
 	Args []string
@@ -46,6 +53,7 @@ func writeInvocationInfo(s *Silo) error {
 		IDHex: s.IDHex,
 
 		Hostname: s.Hostname,
+		Binds:    s.binds,
 
 		Cmd:  s.Cmd,
 		Args: s.Args,
@@ -103,6 +111,11 @@ func isolatedMain() {
 		os.Exit(1)
 	}
 
+	if err := setupBindMounts(fsRootPath, info.Binds); err != nil {
+		fmt.Printf("Setup failure! setupBindMounts() error = %v\n", err)
+		os.Exit(1)
+	}
+
 	if err := colex.SetRootFS(fsRootPath); err != nil {
 		fmt.Printf("Setup failure! SetRootFS() error = %v\n", err)
 		os.Exit(1)
@@ -149,4 +162,38 @@ func isolatedMain() {
 		fmt.Printf("Error running %s: - %v\n", info.Cmd, err)
 		os.Exit(1)
 	}
+}
+
+func setupBindMounts(root string, binds []bindMntInfo) error {
+	for i := range binds {
+		mntPath := path.Join(root, binds[i].SiloPath)
+		if binds[i].IsFile {
+			// make the containing folder if it does not exist
+			if _, err := os.Stat(path.Dir(mntPath)); os.IsNotExist(err) {
+				if err := os.MkdirAll(path.Dir(mntPath), 0750); err != nil {
+					return fmt.Errorf("mkdirall for bind file #%d failed: %v", i, err)
+				}
+			}
+			// make the file as well if it does not exist
+			if _, err := os.Stat(mntPath); os.IsNotExist(err) {
+				if err := ioutil.WriteFile(mntPath, []byte(""), 0750); err != nil {
+					return fmt.Errorf("touch for bind file #%d failed: %v", i, err)
+				}
+			}
+
+		} else {
+			if _, err := os.Stat(mntPath); os.IsNotExist(err) {
+				if err := os.MkdirAll(mntPath, 0750); err != nil {
+					return fmt.Errorf("mkdirall for bind #%d failed: %v", i, err)
+				}
+			}
+		}
+
+		// fmt.Printf("Doing bind from %q to %q\n", binds[i].SysPath, mntPath)
+
+		if err := syscall.Mount(binds[i].SysPath, mntPath, "", syscall.MS_BIND, ""); err != nil {
+			return fmt.Errorf("bind #%d failed: %v", i, err)
+		}
+	}
+	return nil
 }

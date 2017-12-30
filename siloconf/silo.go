@@ -23,6 +23,7 @@ type Silo struct {
 
 	Files     map[string]File `hcl:"file"`
 	FileBalls map[string]File `hcl:"files"`
+	Binds     map[string]Bind `hcl:"bind"`
 }
 
 // File represents configuration for a silo file resource to be put into the
@@ -44,4 +45,10 @@ type Binary struct {
 	Path string   `hcl:"path"`
 	Env  []string `hcl:"env"`
 	Args []string `hcl:"args"`
+}
+
+// Bind indicates a path on the host should be present in the silo.
+type Bind struct {
+	ID   string `hcl:"id"`
+	Path string `hcl:"path"`
 }

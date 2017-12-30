@@ -56,6 +56,7 @@ Silo "s" {
 | *binary*                  | This block specifies the binary to be invoked in the silo, along with it's arguments and environment variables.              |
 | *file* blocks             | Each *file* block specifies a single file which should be copied into the silo.                                              |
 | *files* blocks            | Each *files* block specifies a folder containing files/folders which should be copied into the silo.                         |
+| *bind* blocks             | Each *bind* block specifies the matching bind resource (specified in *colexd*'s configuration) should be mounted at `path`.  |
 
 
 **Network schema:**
@@ -74,6 +75,14 @@ Silo "s" {
 | *path*                    | This string specifies the full path to the binary that should be run inside the container.                                           |
 | *args*                    | List of arguments the binary inside the container should be invoked with.                                                            |
 | *env*                     | List of additional environment variables the binary should have.                                                                     |
+
+**Bind schema:**
+
+| Name                      | Description                                                                                                                          |
+| -------------------       |:-------------------------------------------------------------------------------------------------------------------------------------|
+| *id*                      | Identifies which bind path to use. Should match an entry in the servers configuration with the same id.                              |
+| *path*                    | This string specifies the full path where the file/dir should be mounted, within the silo.                                           |
+
 
 ## Additional environment variables
 
