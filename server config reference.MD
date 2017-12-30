@@ -47,11 +47,13 @@ hostnames = {
 
 **Top-level schema:**
 
-| Name                 | Description                                                                                                          |
-| -------------------  |:---------------------------------------------------------------------------------------------------------------------|
-| *name*               | Name of the host. Mostly unused, except for display to the user.                                                     |
-| *listener*           | Host and port on which the service listens. Format: [host]:port.                                                     |
-| *address_pool*       | CIDR representing the starting IP and subnet from which silos are allocated IPs.                                     |
-| *image*              | Image sections specify additional base images which are available.                                                   |
-| *transport_security* | TLS security options for the service.                                                                                |
-| *hostnames*          | Specify IPv4 addresses which will resolve for the given domain within silos.                                         |
+| Name                      | Description                                                                                                                  |
+| -------------------       |:-----------------------------------------------------------------------------------------------------------------------------|
+| *name*                    | Name of the host. Mostly unused, except for display to the user.                                                             |
+| *address_pool*            | CIDR representing the starting IP and subnet from which silos are allocated IPs.                                             |
+| *listener*                | Host and port on which the service listens. Format: [host]:port.                                                             |
+| *image*                   | Image sections specify additional base images which are available.                                                           |
+| *transport_security*      | TLS security options for the service.                                                                                        |
+| *hostnames*               | Specify IPv4 addresses which will resolve for the given domain within silos.                                                 |
+| *silo_dir*                | Specify the directory within which the filesystems of the silos will be created.                                             |
+| *disable_user_namespaces* | Disables use of user namespaces (clone flag `CLONE_NEWUSER`). This may have unintended side-effects, so advanced users only. |

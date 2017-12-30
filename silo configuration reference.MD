@@ -39,9 +39,46 @@ Silo "s" {
 * The *binary* section specifies what should be run in the silo. *path* is the path to the binary to be invoked, *args* is it's list of arguments, and *env* allows you to specify environment variables.
 * Each *file* block allows you to specify files on your current system which will be dropped in the silo. The 'main script' block references a file on your system `test-script.sh` which will be dropped in the silo at `/script.sh`. `test-script.sh` well be read from the filesystem when you run `colex-cli up`, and for relative paths like in this example, will source the file relative to the current directory.
 * Each *files* block allows you to specify directories/globs on your current system which will be dropped in the silo. The 'things directory' block references a folder `things/` on your system which will be dropped in the silo at `/welp`.
-* The *network* section lets you configure networking within the silo. If *internet_access* is set to true, iptables MASQUERADE rules + routing table entries will exist to allow the silo to access the internet through the host. You can also specify *nameservers* if you want to override default DNS resolvers, but be aware that will break any colex-specific DNS resolution (`<silo-name>.silo` addresses). You can also specify *hosts* if you want to drop any name -> IP combinations into `/etc/hosts` in that container.
+* The *network* section lets you configure networking within the silo. If *internet_access* is set to true, iptables MASQUERADE rules + routing table entries will exist to allow the silo to access the internet through the host. See below for more options.
 
 
 ## Detailed reference
 
-TODO
+**Top-level schema:**
+
+| Name                      | Description                                                                                                                  |
+| -------------------       |:-----------------------------------------------------------------------------------------------------------------------------|
+| *name*                    | Name of the silo. Must be unique on the instance of colexd, used when controlling or talking to the silo.                    |
+| *class*                   | You can set this to a non-unique string to identify similar silos.                                                           |
+| *tags*                    | List of tags (queryable) to be associated with the instance.                                                                 |
+| *base*                    | Specifies which base filesystem should be installed for this silo (default = `img://busybox`). If not the default, this must reference a custom image specified in *colexd*'s config file. |
+| *network*                 | This block specifies options for configuring the network.                                                                    |
+| *binary*                  | This block specifies the binary to be invoked in the silo, along with it's arguments and environment variables.              |
+| *file* blocks             | Each *file* block specifies a single file which should be copied into the silo.                                              |
+| *files* blocks            | Each *files* block specifies a folder containing files/folders which should be copied into the silo.                         |
+
+
+**Network schema:**
+
+| Name                      | Description                                                                                                                          |
+| -------------------       |:-------------------------------------------------------------------------------------------------------------------------------------|
+| *internet_access*         | This boolean specifies whether NAT routing should be configured to provide the silo with internet access (via the host).             |
+| *nameservers*             | List of DNS servers to override defaults. Be aware that will break any colex-specific DNS resolution (`<silo-name>.silo` addresses). |
+| *hosts*                   | This block allows you to specify custom host -> IP mappings, which will be added to `/etc/hosts` in the silo.                        |
+
+
+**Binary schema:**
+
+| Name                      | Description                                                                                                                          |
+| -------------------       |:-------------------------------------------------------------------------------------------------------------------------------------|
+| *path*                    | This string specifies the full path to the binary that should be run inside the container.                                           |
+| *args*                    | List of arguments the binary inside the container should be invoked with.                                                            |
+| *env*                     | List of additional environment variables the binary should have.                                                                     |
+
+## Additional environment variables
+
+The following environment variables are added by default and cannot be disabled (file a FR if you actually need to).
+
+ * `METADATA_ENDPOINT` - Specifies the host:port combination the metadata server can be reached on.
+ * `CLASS` - Set the the class set in the silo config.
+ * `PS1` - Set to `\u@\h:\w> `.
