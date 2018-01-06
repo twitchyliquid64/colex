@@ -70,6 +70,10 @@ type Silo struct {
 	Nameservers []string
 	HostMap     map[string]string
 
+	// cgroup set
+	cgroupConfig *colex.CGroupConfig
+	cgroupSet    *colex.CGroupSet
+
 	// base environment providers
 	bases        []base           // setup filesystem
 	userMappings []accountMappers // setup user/group mappings between silo and parent
@@ -139,6 +143,16 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 
 	if s.Hostname == "" {
 		s.Hostname = s.IDHex
+	}
+
+	if opts.CPUSharePercent > 0 {
+		second := 1000000
+		refreshHertz := 20
+
+		s.cgroupConfig = &colex.CGroupConfig{
+			CPUTimePerPeriodUS:      int64(second / refreshHertz / 100 * opts.CPUSharePercent),
+			CPUTimeBetweenPeriodsUS: int64(second / refreshHertz),
+		}
 	}
 
 	return s, nil
@@ -259,6 +273,11 @@ func (s *Silo) Close() error {
 				return err
 			}
 		}
+		if s.cgroupSet != nil {
+			if err := s.cgroupSet.Close(); err != nil {
+				return err
+			}
+		}
 	}
 
 	if s.shouldDeleteRoot {
@@ -286,6 +305,14 @@ func (s *Silo) Start() error {
 	for i, interf := range s.Interfaces {
 		if err := interf.Setup(s.child, s, i); err != nil {
 			return fmt.Errorf("interface %+v setup failed: %v", interf, err)
+		}
+	}
+
+	if s.cgroupConfig != nil {
+		var err error
+		s.cgroupSet, err = colex.NewCGroupSet(s.IDHex, s.child.Process.Pid, s.cgroupConfig)
+		if err != nil {
+			return err
 		}
 	}
 

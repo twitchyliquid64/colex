@@ -28,6 +28,10 @@ Silo "s" {
   network {
     internet_access = true
   }
+
+  resources = {
+    cpu_percent = 4
+  }
 }
 
 
@@ -57,6 +61,7 @@ Silo "s" {
 | *file* blocks             | Each *file* block specifies a single file which should be copied into the silo.                                              |
 | *files* blocks            | Each *files* block specifies a folder containing files/folders which should be copied into the silo.                         |
 | *grants*                  | This block specifies additional runtime permissions.                                                                         |
+| *resources*               | This block specifies resource constraints for the silo.                                                                      |
 
 
 **Network schema:**
@@ -82,6 +87,12 @@ Silo "s" {
 | -------------------       |:-------------------------------------------------------------------------------------------------------------------------------------|
 | *id*                      | Identifies which bind path to use. Should match an entry in the servers configuration with the same id.                              |
 | *path*                    | This string specifies the full path where the file/dir should be mounted, within the silo.                                           |
+
+**Resources schema:**
+
+| Name                      | Description                                                                                                                          |
+| -------------------       |:-------------------------------------------------------------------------------------------------------------------------------------|
+| *cpu_percent*             | Percentage of total CPU capacity the silo can consume. Values lower than *4* are not supported by the kernel.                        |
 
 
 ## Additional environment variables

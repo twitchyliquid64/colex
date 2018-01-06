@@ -474,6 +474,11 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 		MakeFromFolder:       s.config.SiloDir,
 		DisableAcctNamespace: s.config.DisableUserNamespaces,
 		Grant:                req.SiloConf.Grant,
+		CPUSharePercent:      req.SiloConf.Resources.CPUPercent,
+	}
+
+	if req.SiloConf.Resources.CPUPercent > 0 && req.SiloConf.Resources.CPUPercent < 4 {
+		return fmt.Errorf("resources.cpu_percent (%d) lower than driver minimum", req.SiloConf.Resources.CPUPercent)
 	}
 
 	if err := s.resolveBase(req.SiloConf.Base, &builder); err != nil {

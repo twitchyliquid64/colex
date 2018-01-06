@@ -30,6 +30,9 @@ type Options struct {
 	Nameservers []string
 	HostMap     map[string]string
 
+	// resources
+	CPUSharePercent int
+
 	// invocation
 	Cmd  string
 	Args []string

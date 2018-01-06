@@ -290,7 +290,7 @@ func listCommand(args []string) error {
 		}
 		tableData[len(tableData)-1][4] = strings.Join(addresses, ", ")
 		ss := sumInterfaceStatistics(silo.Interfaces)
-		tableData[len(tableData)-1][5] = fmt.Sprintf("Net: %sb Mem: %sb", bytefmt.ByteSize(ss.TxBytes+ss.RxBytes), bytefmt.ByteSize(silo.Stats.Mem.Resident))
+		tableData[len(tableData)-1][5] = fmt.Sprintf("Net=%sb Mem=%sb", bytefmt.ByteSize(ss.TxBytes+ss.RxBytes), bytefmt.ByteSize(silo.Stats.Mem.Resident))
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)

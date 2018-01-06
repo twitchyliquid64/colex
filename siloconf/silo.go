@@ -21,6 +21,8 @@ type Silo struct {
 
 	Binary Binary
 
+	Resources Resources
+
 	Grant map[string]bool `hcl:"grants"`
 
 	Files     map[string]File `hcl:"file"`
@@ -53,4 +55,9 @@ type Binary struct {
 type Bind struct {
 	ID   string `hcl:"id"`
 	Path string `hcl:"path"`
+}
+
+// Resources specifies resource constraints for the silo.
+type Resources struct {
+	CPUPercent int `hcl:"cpu_percent"`
 }
