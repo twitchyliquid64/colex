@@ -32,6 +32,7 @@ type Options struct {
 
 	// resources
 	CPUSharePercent int
+	MaxMemoryBytes  int64
 
 	// invocation
 	Cmd  string

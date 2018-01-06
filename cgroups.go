@@ -14,35 +14,43 @@ import (
 type CGroupConfig struct {
 	CPUTimeBetweenPeriodsUS int64
 	CPUTimePerPeriodUS      int64
+	MemoryMaxBytes          int64
 }
 
 // NewCGroupSet creates a suite of Cgroups with the process within it.
 func NewCGroupSet(id string, pid int, c *CGroupConfig) (*CGroupSet, error) {
-	s := CGroupSet{ID: id, PID: pid}
+	s := CGroupSet{ID: "c" + id, PID: pid}
 
-	cpuPath, err := newCPUGroup(id, pid)
+	cpuPath, err := newCPUGroup(s.ID, pid)
 	if err != nil {
 		return nil, err
 	}
 	s.CPUGroupPath = cpuPath
-	if err := setCPUGroupStats(cpuPath, c); err != nil {
+	if err2 := setCPUGroupStats(cpuPath, c); err2 != nil {
 		s.Close()
+		return nil, err2
+	}
+
+	memPath, err := newMemoryGroup(s.ID, pid, c)
+	if err != nil {
 		return nil, err
 	}
+	s.MemoryGroupPath = memPath
 
 	return &s, nil
 }
 
 // CGroupSet represents a process within (a) cgroup(s).
 type CGroupSet struct {
-	ID           string
-	PID          int
-	CPUGroupPath string
+	ID              string
+	PID             int
+	CPUGroupPath    string
+	MemoryGroupPath string
 }
 
 // Close destroys all cgroups in this set.
 func (s *CGroupSet) Close() error {
-	for _, path := range []string{s.CPUGroupPath} {
+	for _, path := range []string{s.CPUGroupPath, s.MemoryGroupPath} {
 		if path != "" {
 			os.RemoveAll(path)
 			if _, err := os.Stat(path); err != nil && !os.IsNotExist(err) {
@@ -52,6 +60,29 @@ func (s *CGroupSet) Close() error {
 	}
 
 	return nil
+}
+
+func newMemoryGroup(id string, pid int, c *CGroupConfig) (string, error) {
+	subsystemPath, err := GetSubsystemMountpoint("memory")
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(subsystemPath, id)
+
+	if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
+		return "", err
+	}
+
+	if c.MemoryMaxBytes != 0 {
+		if err := writeValue(path, "memory.limit_in_bytes", strconv.FormatInt(c.MemoryMaxBytes, 10)); err != nil {
+			return "", err
+		}
+	}
+
+	if err := writeValue(path, "cgroup.procs", strconv.Itoa(pid)); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func newCPUGroup(id string, pid int) (string, error) {

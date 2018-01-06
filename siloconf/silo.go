@@ -59,5 +59,6 @@ type Bind struct {
 
 // Resources specifies resource constraints for the silo.
 type Resources struct {
-	CPUPercent int `hcl:"cpu_percent"`
+	CPUPercent     int   `hcl:"cpu_percent"`
+	MaxMemoryBytes int64 `hcl:"max_memory_bytes"`
 }

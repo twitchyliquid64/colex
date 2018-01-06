@@ -145,13 +145,18 @@ func NewSilo(name string, opts *Options) (*Silo, error) {
 		s.Hostname = s.IDHex
 	}
 
-	if opts.CPUSharePercent > 0 {
-		second := 1000000
-		refreshHertz := 20
+	if opts.CPUSharePercent > 0 || opts.MaxMemoryBytes > 0 {
+		s.cgroupConfig = &colex.CGroupConfig{}
 
-		s.cgroupConfig = &colex.CGroupConfig{
-			CPUTimePerPeriodUS:      int64(second / refreshHertz / 100 * opts.CPUSharePercent),
-			CPUTimeBetweenPeriodsUS: int64(second / refreshHertz),
+		if opts.CPUSharePercent > 0 {
+			second := 1000000
+			refreshHertz := 20
+			s.cgroupConfig.CPUTimePerPeriodUS = int64(second / refreshHertz / 100 * opts.CPUSharePercent)
+			s.cgroupConfig.CPUTimeBetweenPeriodsUS = int64(second / refreshHertz)
+		}
+
+		if opts.MaxMemoryBytes > 0 {
+			s.cgroupConfig.MemoryMaxBytes = opts.MaxMemoryBytes
 		}
 	}
 

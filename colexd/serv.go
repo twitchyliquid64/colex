@@ -475,6 +475,7 @@ func (s *Server) startSiloInternal(req *wire.UpPacket) error {
 		DisableAcctNamespace: s.config.DisableUserNamespaces,
 		Grant:                req.SiloConf.Grant,
 		CPUSharePercent:      req.SiloConf.Resources.CPUPercent,
+		MaxMemoryBytes:       req.SiloConf.Resources.MaxMemoryBytes,
 	}
 
 	if req.SiloConf.Resources.CPUPercent > 0 && req.SiloConf.Resources.CPUPercent < 4 {
